@@ -1,0 +1,301 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  phone        String?   @unique
+  passwordHash String
+  googleId     String?   @unique
+  authProvider AuthProvider @default(EMAIL)
+  name         String
+  gender       Gender?
+  birthDate    DateTime?
+  city         String?
+  bio          String?   @db.Text
+  avatarUrl    String?
+  role         Role      @default(USER)
+  isVerified   Boolean   @default(false)
+  isSuspended  Boolean   @default(false)
+
+  interests             UserInterest[]
+  bookings              Booking[]
+  eventRegistrations    EventRegistration[]
+  notifications         Notification[]
+  emailVerificationCodes EmailVerificationCode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Interest {
+  id    String         @id @default(cuid())
+  name  String         @unique
+  users UserInterest[]
+
+  @@map("interests")
+}
+
+model UserInterest {
+  userId     String
+  interestId String
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@id([userId, interestId])
+  @@map("user_interests")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model City {
+  id       String  @id @default(cuid())
+  name     String  @unique
+  areas    String  @db.Text // JSON string: ["Area1","Area2"]
+  isActive Boolean @default(true)
+
+  dinners Dinner[]
+
+  @@map("cities")
+}
+
+model Dinner {
+  id          String       @id @default(cuid())
+  cityId      String
+  date        DateTime
+  startTime   String
+  maxPerTable Int          @default(6)
+  status      DinnerStatus @default(OPEN)
+  revealedAt  DateTime?
+  venueName   String?
+  venueAddress String?
+
+  city        City         @relation(fields: [cityId], references: [id])
+  budgetTiers BudgetTier[]
+  tables      DinnerTable[]
+  bookings    Booking[]
+
+  createdAt DateTime @default(now())
+
+  @@map("dinners")
+}
+
+enum DinnerStatus {
+  OPEN
+  MATCHING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model BudgetTier {
+  id       String @id @default(cuid())
+  dinnerId String
+  label    String
+  price    Int
+
+  dinner   Dinner    @relation(fields: [dinnerId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@map("budget_tiers")
+}
+
+model Booking {
+  id           String        @id @default(cuid())
+  userId       String
+  dinnerId     String
+  budgetTierId String
+  status       BookingStatus @default(PENDING_PAYMENT)
+  tableId      String?
+
+  user       User        @relation(fields: [userId], references: [id])
+  dinner     Dinner      @relation(fields: [dinnerId], references: [id])
+  budgetTier BudgetTier  @relation(fields: [budgetTierId], references: [id])
+  table      DinnerTable? @relation(fields: [tableId], references: [id])
+  payment    Payment?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dinnerId])
+  @@map("bookings")
+}
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  PENDING_VERIFICATION
+  CONFIRMED
+  MATCHED
+  CANCELLED
+  REFUNDED
+}
+
+model Payment {
+  id           String        @id @default(cuid())
+  bookingId    String        @unique
+  amount       Int
+  method       String        @default("QRIS")
+  proofUrl     String?
+  status       PaymentStatus @default(PENDING)
+  verifiedById String?
+  verifiedAt   DateTime?
+  note         String?
+  expiredAt    DateTime
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model DinnerTable {
+  id       String @id @default(cuid())
+  dinnerId String
+  name     String
+
+  dinner   Dinner    @relation(fields: [dinnerId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@map("dinner_tables")
+}
+
+model Event {
+  id          String  @id @default(cuid())
+  title       String
+  slug        String  @unique
+  description String  @db.Text
+  posterUrl   String?
+  date        DateTime
+  cityId      String?
+  price       Int
+  capacity    Int
+  status      String  @default("OPEN")
+
+  registrations EventRegistration[]
+
+  createdAt DateTime @default(now())
+
+  @@map("events")
+}
+
+model EventRegistration {
+  id      String        @id @default(cuid())
+  eventId String
+  userId  String
+  status  BookingStatus @default(PENDING_PAYMENT)
+  payment Json?
+
+  event Event @relation(fields: [eventId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+  @@map("event_registrations")
+}
+
+model Notification {
+  id      String    @id @default(cuid())
+  userId  String
+  channel String    // EMAIL / WA / IN_APP
+  type    String    // PAYMENT_CONFIRMED, MATCH_READY, LOCATION_REVEAL, REMINDER
+  payload Json
+  sentAt  DateTime?
+  isRead  Boolean   @default(false)
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
+
+model Testimonial {
+  id          String  @id @default(cuid())
+  name        String
+  age         Int?
+  content     String  @db.Text
+  isPublished Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@map("testimonials")
+}
+
+model CityRequest {
+  id       String   @id @default(cuid())
+  cityName String
+  email    String?
+  count    Int      @default(1)
+
+  createdAt DateTime @default(now())
+
+  @@map("city_requests")
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique @db.VarChar(512)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model EmailVerificationCode {
+  id         String    @id @default(cuid())
+  userId     String
+  codeHash   String    @db.VarChar(255)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_codes")
+}
