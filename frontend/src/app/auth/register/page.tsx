@@ -414,7 +414,7 @@ function InterestsStep({ interests, selectedInterests, toggleInterest, interestE
         {interestError && <p className="mt-2 text-xs text-red-500">{interestError}</p>}
       </div>
 
-      {regError && (
+      {Boolean(regError) && (
         <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-600">
           {getApiErrorMessage(regError, "Registrasi gagal. Coba lagi.")}
         </div>
@@ -455,7 +455,7 @@ function VerificationPanel({ email, code, setCode, verifyEmail, resendVerificati
         className="input-warm text-center text-lg font-bold tracking-[0.3em]"
       />
 
-      {verifyEmail.error && (
+      {Boolean(verifyEmail.error) && (
         <div className="mt-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-600">
           {getApiErrorMessage(verifyEmail.error, "Kode verifikasi tidak valid")}
         </div>
