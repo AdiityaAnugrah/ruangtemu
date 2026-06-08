@@ -3,6 +3,22 @@ import argon2 from "argon2";
 
 const prisma = new PrismaClient();
 
+function adminSeedConfig() {
+  const email = process.env.SEED_ADMIN_EMAIL || "admin@ruangtemu.biz.id";
+  const name = process.env.SEED_ADMIN_NAME || "Admin Ruang Temu";
+  const password = process.env.SEED_ADMIN_PASSWORD;
+
+  if (process.env.NODE_ENV === "production" && !password) {
+    throw new Error("SEED_ADMIN_PASSWORD wajib diisi saat seed production");
+  }
+
+  return {
+    email,
+    name,
+    password: password || "Admin@12345",
+  };
+}
+
 async function main() {
   const interestNames = [
     "Teknologi", "Startup", "Kuliner", "Travel", "Olahraga",
@@ -39,13 +55,14 @@ async function main() {
   }
   console.log("Cities seeded");
 
-  const adminHash = await argon2.hash("Admin@12345");
+  const seedAdmin = adminSeedConfig();
+  const adminHash = await argon2.hash(seedAdmin.password);
   const admin = await prisma.user.upsert({
-    where: { email: "admin@ruangtemu.biz.id" },
+    where: { email: seedAdmin.email },
     update: { role: Role.ADMIN, isVerified: true, isSuspended: false },
     create: {
-      email: "admin@ruangtemu.biz.id",
-      name: "Admin RuangTemu",
+      email: seedAdmin.email,
+      name: seedAdmin.name,
       passwordHash: adminHash,
       role: Role.ADMIN,
       isVerified: true,
@@ -78,7 +95,7 @@ async function main() {
   console.log("Default settings seeded");
 
   console.log("\nSeed selesai");
-  console.log("Admin: admin@ruangtemu.biz.id / Admin@12345");
+  console.log(`Admin: ${admin.email}`);
 }
 
 main()

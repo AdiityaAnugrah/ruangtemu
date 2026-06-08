@@ -412,12 +412,15 @@ npm run dev
 # → Frontend tersedia di http://localhost:3201
 ```
 
-### C. Akun Default (dari seed)
+### C. Akun Admin Awal (dari seed)
 
-| Role | Email | Password |
-|---|---|---|
-| **Admin** | `admin@ruangtemu.biz.id` | `Admin@12345` |
-| **User** | `user@example.com` | `User@12345` |
+Seed membuat akun admin dari environment:
+
+| Env | Contoh |
+|---|---|
+| `SEED_ADMIN_EMAIL` | `admin@ruangtemu.biz.id` |
+| `SEED_ADMIN_NAME` | `Admin Ruang Temu` |
+| `SEED_ADMIN_PASSWORD` | isi di `.env`, jangan commit |
 
 > Password wajib: min. 8 karakter, min. 1 huruf kapital, min. 1 angka.
 
