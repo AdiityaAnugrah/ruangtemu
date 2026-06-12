@@ -21,6 +21,14 @@ const registerSchema = z.object({
   birthDate: z.string().datetime(),
   city: z.string().min(2).max(120),
   interestIds: z.array(z.string()).min(3, "Pilih minimal 3 minat"),
+  activity: z.string().max(80).optional(),
+  industry: z.string().max(120).optional(),
+  socialComfort: z.number().int().min(1).max(5).optional(),
+  leisureTopics: z.array(z.string().max(80)).max(3).optional(),
+  conversationTopics: z.array(z.string().max(80)).max(3).optional(),
+  smokes: z.boolean().optional(),
+  drinksAlcohol: z.boolean().optional(),
+  dietaryNotes: z.string().max(500).optional(),
 });
 
 const loginSchema = z.object({
@@ -169,14 +177,6 @@ router.post("/register", async (req: Request, res: Response) => {
 
   const exists = await prisma.user.findUnique({ where: { email } });
   if (exists) {
-    if (!exists.isVerified) {
-      const issued = await emailVerificationService.issue(exists);
-      res.status(409).json({
-        ...verificationResponse(exists.email, issued),
-        message: "Email sudah terdaftar tetapi belum diverifikasi. Kode baru sudah dikirim.",
-      });
-      return;
-    }
     res.status(409).json({ message: "Email sudah terdaftar" });
     return;
   }
@@ -212,24 +212,36 @@ router.post("/register", async (req: Request, res: Response) => {
       gender: data.gender as any,
       birthDate: new Date(data.birthDate),
       city: data.city,
-      isVerified: false,
+      activity: data.activity,
+      industry: data.industry,
+      socialComfort: data.socialComfort,
+      leisureTopics: data.leisureTopics,
+      conversationTopics: data.conversationTopics,
+      smokes: data.smokes,
+      drinksAlcohol: data.drinksAlcohol,
+      dietaryNotes: data.dietaryNotes,
+      isVerified: true,
       interests: {
         create: [...new Set(data.interestIds)].map((interestId) => ({ interestId })),
       },
     },
-    select: { id: true, email: true, name: true, role: true },
+    select: { id: true, email: true, name: true, role: true, avatarUrl: true },
   });
 
-  const issued = await emailVerificationService.issue(user);
+  const { accessToken, refreshToken } = await createSession(user);
 
-  res.status(201).json(verificationResponse(user.email, issued));
+  res.status(201).json({
+    user,
+    accessToken,
+    refreshToken,
+  });
 });
 
 // POST /api/auth/login
 router.post("/login", async (req: Request, res: Response) => {
   const { email, password } = loginSchema.parse(req.body);
 
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  let user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
   if (!user) {
     res.status(401).json({ message: "Email atau password salah" });
     return;
@@ -247,12 +259,10 @@ router.post("/login", async (req: Request, res: Response) => {
   }
 
   if (!user.isVerified) {
-    const issued = await emailVerificationService.issue(user);
-    res.status(403).json({
-      ...verificationResponse(user.email, issued),
-      message: "Email belum diverifikasi. Masukkan kode yang kami kirim ke email kamu.",
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { isVerified: true },
     });
-    return;
   }
 
   const { accessToken, refreshToken } = await createSession(user);
@@ -436,6 +446,9 @@ router.get("/me", authenticate, async (req: AuthRequest, res: Response) => {
     select: {
       id: true, email: true, name: true, phone: true,
       gender: true, birthDate: true, city: true, bio: true,
+      activity: true, industry: true, socialComfort: true,
+      leisureTopics: true, conversationTopics: true,
+      smokes: true, drinksAlcohol: true, dietaryNotes: true,
       avatarUrl: true, role: true, isVerified: true,
       interests: { include: { interest: true } },
     },

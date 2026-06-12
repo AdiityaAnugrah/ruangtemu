@@ -169,7 +169,18 @@ export const notificationService = {
     await recordNotification(user.id, "EMAIL", "MATCH_READY", { bookingId: booking.id, tableName: booking.table.name });
   },
 
-  async sendLocationReveal(user: UserLike, dinner: { id: string; date: Date; city: { name: string }; venueName: string; venueAddress: string }) {
+  async sendLocationReveal(user: UserLike, dinner: {
+    id: string;
+    date: Date;
+    city: { name: string };
+    venueName: string;
+    venueAddress: string;
+    arrivalTime: string;
+    reservationName: string;
+    hostName?: string | null;
+    hostPhone?: string | null;
+    venueNotes?: string | null;
+  }) {
     if (await hasLocationRevealNotification(user.id, dinner.id)) return false;
 
     const dinnerDate = new Date(dinner.date).toLocaleDateString("id-ID", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -180,15 +191,28 @@ export const notificationService = {
       <p><strong>Tanggal:</strong> ${dinnerDate}</p>
       <p><strong>Tempat:</strong> ${dinner.venueName}</p>
       <p><strong>Alamat:</strong> ${dinner.venueAddress}</p>
-      <p>Selamat menikmati dinner! 🍽️</p>
-      <p>— Tim RuangTemu</p>
+      <p><strong>Jam kedatangan:</strong> ${dinner.arrivalTime}</p>
+      <p><strong>Reservasi atas nama:</strong> ${dinner.reservationName}</p>
+      ${dinner.hostName || dinner.hostPhone ? `<p><strong>PIC:</strong> ${[dinner.hostName, dinner.hostPhone].filter(Boolean).join(" - ")}</p>` : ""}
+      ${dinner.venueNotes ? `<p><strong>Catatan:</strong> ${dinner.venueNotes}</p>` : ""}
+      <p>Info meja kamu bisa dilihat di detail booking RuangTemu.</p>
+      <p>Selamat menikmati dinner!</p>
+      <p>- Tim RuangTemu</p>
     `;
     await sendEmail(user.email, subject, html);
     if (user.phone) {
-      const message = `Lokasi dinner RuangTemu besok (${dinnerDate}): ${dinner.venueName}, ${dinner.venueAddress}. Sampai ketemu! - Tim RuangTemu`;
+      const pic = dinner.hostName || dinner.hostPhone ? ` PIC: ${[dinner.hostName, dinner.hostPhone].filter(Boolean).join(" - ")}.` : "";
+      const notes = dinner.venueNotes ? ` Catatan: ${dinner.venueNotes}.` : "";
+      const message = `Lokasi dinner RuangTemu (${dinnerDate}): ${dinner.venueName}, ${dinner.venueAddress}. Datang: ${dinner.arrivalTime}. Reservasi: ${dinner.reservationName}.${pic}${notes} Info meja ada di detail booking. - Tim RuangTemu`;
       await sendWA(user.phone, message);
     }
-    await recordNotification(user.id, "EMAIL", "LOCATION_REVEAL", { dinnerId: dinner.id });
+    await recordNotification(user.id, "EMAIL", "LOCATION_REVEAL", {
+      dinnerId: dinner.id,
+      venueName: dinner.venueName,
+      venueAddress: dinner.venueAddress,
+      arrivalTime: dinner.arrivalTime,
+      reservationName: dinner.reservationName,
+    });
     return true;
   },
 

@@ -7,11 +7,39 @@ import { notificationService } from "./notificationService";
 interface ParticipantData {
   bookingId: string;
   userId: string;
+  name: string;
   age: number;
   interestIds: string[];
+  interestNames: string[];
   gender: string | null;
   location: string | null;
+  activity: string | null;
+  industry: string | null;
+  socialComfort: number | null;
+  leisureTopics: string[];
+  conversationTopics: string[];
+  smokes: boolean | null;
+  drinksAlcohol: boolean | null;
+  dietaryNotes: string | null;
 }
+
+type PreviewParticipant = {
+  userId: string;
+  name: string;
+  age: number;
+  location: string | null;
+  interests: string[];
+  matchProfile: {
+    activity: string | null;
+    industry: string | null;
+    socialComfort: number | null;
+    leisureTopics: string[];
+    conversationTopics: string[];
+    smokes: boolean | null;
+    drinksAlcohol: boolean | null;
+    dietaryNotes: string | null;
+  };
+};
 
 function calculateAge(birthDate: Date): number {
   const today = new Date();
@@ -21,16 +49,34 @@ function calculateAge(birthDate: Date): number {
   return age;
 }
 
-function interestSimilarity(a: string[], b: string[]): number {
-  if (a.length === 0 && b.length === 0) return 0;
-  const setA = new Set(a);
-  const intersection = b.filter((x) => setA.has(x)).length;
-  const union = new Set([...a, ...b]).size;
-  return union === 0 ? 0 : intersection / union; // Jaccard
-}
-
 function normalize(value?: string | null): string {
   return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function normalizeArray(values: string[]): string[] {
+  return values.map(normalize).filter(Boolean);
+}
+
+function jsonStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean);
+}
+
+function similarity(a: string[], b: string[]): number {
+  const normalizedA = normalizeArray(a);
+  const normalizedB = normalizeArray(b);
+  if (normalizedA.length === 0 || normalizedB.length === 0) return 0;
+  const setA = new Set(normalizedA);
+  const intersection = normalizedB.filter((x) => setA.has(x)).length;
+  const union = new Set([...normalizedA, ...normalizedB]).size;
+  return union === 0 ? 0 : intersection / union;
+}
+
+function exactTextSimilarity(a?: string | null, b?: string | null): number {
+  const normalizedA = normalize(a);
+  const normalizedB = normalize(b);
+  if (!normalizedA || !normalizedB) return 0;
+  return normalizedA === normalizedB ? 1 : 0;
 }
 
 function locationSimilarity(a?: string | null, b?: string | null): number {
@@ -49,23 +95,76 @@ function ageSimilarity(a: number, b: number, ageTolerance: number): number {
   return Math.max(0, 1 - (diff - ageTolerance) / Math.max(ageTolerance, 1));
 }
 
+function socialComfortSimilarity(a?: number | null, b?: number | null): number {
+  if (!a || !b) return 0;
+  return Math.max(0, 1 - Math.abs(a - b) / 4);
+}
+
+function booleanCompatibility(a?: boolean | null, b?: boolean | null): number {
+  if (a === null || a === undefined || b === null || b === undefined) return 0.45;
+  return a === b ? 1 : 0;
+}
+
+function dietaryCompatibility(a?: string | null, b?: string | null): number {
+  const normalizedA = normalize(a);
+  const normalizedB = normalize(b);
+  if (!normalizedA && !normalizedB) return 0.6;
+  if (!normalizedA || !normalizedB) return 0.35;
+  if (normalizedA === normalizedB) return 1;
+  return similarity(normalizedA.split(/[,\s/]+/), normalizedB.split(/[,\s/]+/));
+}
+
+function profileCompleteness(participant: ParticipantData): number {
+  return [
+    participant.age > 0,
+    participant.gender,
+    participant.location,
+    participant.activity,
+    participant.industry,
+    participant.socialComfort,
+    participant.leisureTopics.length > 0,
+    participant.conversationTopics.length > 0,
+    participant.interestIds.length > 0,
+    participant.smokes !== null,
+    participant.drinksAlcohol !== null,
+  ].filter(Boolean).length;
+}
+
 function scorePair(a: ParticipantData, b: ParticipantData, ageTolerance: number): number {
-  const interestScore = interestSimilarity(a.interestIds, b.interestIds);
+  const conversationScore = similarity(a.conversationTopics, b.conversationTopics);
+  const interestScore = similarity(a.interestIds, b.interestIds);
+  const leisureScore = similarity(a.leisureTopics, b.leisureTopics);
+  const activityScore = exactTextSimilarity(a.activity, b.activity);
+  const industryScore = exactTextSimilarity(a.industry, b.industry);
+  const socialScore = socialComfortSimilarity(a.socialComfort, b.socialComfort);
   const locationScore = locationSimilarity(a.location, b.location);
   const ageScore = ageSimilarity(a.age, b.age, ageTolerance);
+  const smokeScore = booleanCompatibility(a.smokes, b.smokes);
+  const alcoholScore = booleanCompatibility(a.drinksAlcohol, b.drinksAlcohol);
+  const dietaryScore = dietaryCompatibility(a.dietaryNotes, b.dietaryNotes);
 
-  return (interestScore * 5) + (locationScore * 2) + (ageScore * 1.5);
+  return (
+    conversationScore * 4 +
+    interestScore * 3 +
+    leisureScore * 2 +
+    activityScore * 1.15 +
+    industryScore * 1.15 +
+    socialScore * 1.4 +
+    locationScore * 1.5 +
+    ageScore * 1.2 +
+    smokeScore * 0.75 +
+    alcoholScore * 0.65 +
+    dietaryScore * 0.45
+  );
 }
 
 function genderBalanceScore(table: ParticipantData[], candidate: ParticipantData): number {
-  if (!candidate.gender) return 0;
+  if (!candidate.gender || candidate.gender === "OTHER") return 0;
   const sameGenderCount = table.filter((p) => p.gender === candidate.gender).length;
-  const lowestCount = Math.min(
-    table.filter((p) => p.gender === "MALE").length,
-    table.filter((p) => p.gender === "FEMALE").length,
-    table.filter((p) => p.gender === "OTHER").length
-  );
-  return sameGenderCount <= lowestCount ? 0.2 : -0.05;
+  const oppositeGenderCount = table.filter((p) => p.gender && p.gender !== candidate.gender && p.gender !== "OTHER").length;
+  if (sameGenderCount === 0) return 0.45;
+  if (sameGenderCount <= oppositeGenderCount) return 0.2;
+  return -0.15;
 }
 
 function scoreCandidateForTable(candidate: ParticipantData, table: ParticipantData[], ageTolerance: number): number {
@@ -73,18 +172,43 @@ function scoreCandidateForTable(candidate: ParticipantData, table: ParticipantDa
   return pairAverage + genderBalanceScore(table, candidate);
 }
 
+function scoreTable(table: ParticipantData[], ageTolerance: number): number {
+  if (table.length <= 1) return 0;
+  let total = 0;
+  let pairs = 0;
+  for (let i = 0; i < table.length; i++) {
+    for (let j = i + 1; j < table.length; j++) {
+      total += scorePair(table[i], table[j], ageTolerance);
+      pairs++;
+    }
+  }
+  return pairs === 0 ? 0 : Number((total / pairs).toFixed(2));
+}
+
+function targetTableSizes(totalParticipants: number, maxPerTable: number): number[] {
+  if (totalParticipants <= 0) return [];
+  const tableCount = Math.ceil(totalParticipants / Math.max(maxPerTable, 1));
+  const baseSize = Math.floor(totalParticipants / tableCount);
+  const extraSeats = totalParticipants % tableCount;
+  return Array.from({ length: tableCount }, (_, index) => baseSize + (index < extraSeats ? 1 : 0));
+}
+
 function greedyCluster(participants: ParticipantData[], tableSize: number, ageTolerance: number): ParticipantData[][] {
   const pool = [...participants].sort((a, b) => {
-    const interestDiff = b.interestIds.length - a.interestIds.length;
+    const completenessDiff = profileCompleteness(b) - profileCompleteness(a);
+    if (completenessDiff !== 0) return completenessDiff;
+    const interestDiff = b.interestIds.length + b.conversationTopics.length - (a.interestIds.length + a.conversationTopics.length);
     if (interestDiff !== 0) return interestDiff;
     return a.age - b.age;
   });
   const tables: ParticipantData[][] = [];
+  const sizes = targetTableSizes(participants.length, tableSize);
 
-  while (pool.length > 0) {
+  for (const size of sizes) {
+    if (pool.length === 0) break;
     const table: ParticipantData[] = [pool.shift()!];
 
-    while (table.length < tableSize && pool.length > 0) {
+    while (table.length < size && pool.length > 0) {
       const candidates = pool
         .map((participant, idx) => ({
           idx,
@@ -102,52 +226,76 @@ function greedyCluster(participants: ParticipantData[], tableSize: number, ageTo
   return tables;
 }
 
+function toParticipant(booking: any): ParticipantData {
+  const conversationTopics = jsonStringArray(booking.user.conversationTopics);
+  const interestNames = booking.user.interests.map((ui: any) => ui.interest?.name).filter(Boolean);
+
+  return {
+    bookingId: booking.id,
+    userId: booking.user.id,
+    name: booking.user.name,
+    age: booking.user.birthDate ? calculateAge(booking.user.birthDate) : 0,
+    interestIds: booking.user.interests.map((ui: any) => ui.interestId),
+    interestNames,
+    gender: booking.user.gender,
+    location: booking.user.city,
+    activity: booking.user.activity,
+    industry: booking.user.industry,
+    socialComfort: booking.user.socialComfort,
+    leisureTopics: jsonStringArray(booking.user.leisureTopics),
+    conversationTopics: conversationTopics.length > 0 ? conversationTopics : interestNames,
+    smokes: booking.user.smokes,
+    drinksAlcohol: booking.user.drinksAlcohol,
+    dietaryNotes: booking.user.dietaryNotes,
+  };
+}
+
+function previewParticipant(participant: ParticipantData): PreviewParticipant {
+  return {
+    userId: participant.userId,
+    name: participant.name,
+    age: participant.age,
+    location: participant.location,
+    interests: participant.interestNames,
+    matchProfile: {
+      activity: participant.activity,
+      industry: participant.industry,
+      socialComfort: participant.socialComfort,
+      leisureTopics: participant.leisureTopics,
+      conversationTopics: participant.conversationTopics,
+      smokes: participant.smokes,
+      drinksAlcohol: participant.drinksAlcohol,
+      dietaryNotes: participant.dietaryNotes,
+    },
+  };
+}
+
+async function getConfirmedParticipants(dinnerId: string): Promise<ParticipantData[]> {
+  const bookings = await prisma.booking.findMany({
+    where: { dinnerId, status: "CONFIRMED" },
+    include: {
+      user: {
+        include: { interests: { include: { interest: true } } },
+      },
+    },
+  });
+
+  return bookings.map(toParticipant);
+}
+
 export const matchingService = {
-  async preview(dinnerId: string): Promise<{ tables: { participants: { userId: string; name: string; age: number; location: string | null; interests: string[] }[] }[]; unassigned: number }> {
+  async preview(dinnerId: string): Promise<{ tables: { tableScore: number; participants: PreviewParticipant[] }[]; unassigned: number }> {
     const dinner = await prisma.dinner.findUnique({ where: { id: dinnerId } });
     if (!dinner) throw new Error("Dinner tidak ditemukan");
 
     const ageTolerance = await getNumberSetting("matching_age_tolerance", "MATCHING_AGE_TOLERANCE", 7);
-
-    const bookings = await prisma.booking.findMany({
-      where: { dinnerId, status: "CONFIRMED" },
-      include: {
-        user: {
-          include: { interests: { include: { interest: true } } },
-        },
-      },
-    });
-
-    const participants: ParticipantData[] = bookings.map((b) => ({
-      bookingId: b.id,
-      userId: b.user.id,
-      age: b.user.birthDate ? calculateAge(b.user.birthDate) : 0,
-      interestIds: b.user.interests.map((ui) => ui.interestId),
-      gender: b.user.gender,
-      location: b.user.city,
-    }));
-
+    const participants = await getConfirmedParticipants(dinnerId);
     const tables = greedyCluster(participants, dinner.maxPerTable, ageTolerance);
 
-    const result = await Promise.all(
-      tables.map(async (t) => ({
-        participants: await Promise.all(
-          t.map(async (p) => {
-            const user = await prisma.user.findUnique({
-              where: { id: p.userId },
-              include: { interests: { include: { interest: true } } },
-            });
-            return {
-              userId: p.userId,
-              name: user!.name,
-              age: p.age,
-              location: user!.city,
-              interests: user!.interests.map((ui) => ui.interest.name),
-            };
-          })
-        ),
-      }))
-    );
+    const result = tables.map((table) => ({
+      tableScore: scoreTable(table, ageTolerance),
+      participants: table.map(previewParticipant),
+    }));
 
     const assignedCount = tables.reduce((sum, t) => sum + t.length, 0);
 
@@ -159,31 +307,12 @@ export const matchingService = {
     if (!dinner) throw new Error("Dinner tidak ditemukan");
 
     const ageTolerance = await getNumberSetting("matching_age_tolerance", "MATCHING_AGE_TOLERANCE", 7);
-
-    const bookings = await prisma.booking.findMany({
-      where: { dinnerId, status: "CONFIRMED" },
-      include: {
-        user: {
-          include: { interests: true },
-        },
-      },
-    });
-
-    const participants: ParticipantData[] = bookings.map((b) => ({
-      bookingId: b.id,
-      userId: b.user.id,
-      age: b.user.birthDate ? calculateAge(b.user.birthDate) : 0,
-      interestIds: b.user.interests.map((ui) => ui.interestId),
-      gender: b.user.gender,
-      location: b.user.city,
-    }));
-
+    const participants = await getConfirmedParticipants(dinnerId);
     const tables = greedyCluster(participants, dinner.maxPerTable, ageTolerance);
 
     let participantsMatched = 0;
 
     await prisma.$transaction(async (tx) => {
-      // Hapus tabel lama
       await tx.dinnerTable.deleteMany({ where: { dinnerId } });
 
       for (let i = 0; i < tables.length; i++) {
@@ -206,7 +335,6 @@ export const matchingService = {
       await tx.dinner.update({ where: { id: dinnerId }, data: { status: "MATCHING" } });
     });
 
-    // Kirim notifikasi ke semua peserta yang matched
     for (const t of tables) {
       for (const p of t) {
         try {

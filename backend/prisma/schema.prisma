@@ -23,6 +23,14 @@ model User {
   city         String?
   bio          String?   @db.Text
   avatarUrl    String?
+  activity     String?
+  industry     String?
+  socialComfort Int?
+  leisureTopics Json?
+  conversationTopics Json?
+  smokes       Boolean?
+  drinksAlcohol Boolean?
+  dietaryNotes String?   @db.Text
   role         Role      @default(USER)
   isVerified   Boolean   @default(false)
   isSuspended  Boolean   @default(false)
@@ -95,6 +103,11 @@ model Dinner {
   revealedAt  DateTime?
   venueName   String?
   venueAddress String?
+  arrivalTime String?
+  reservationName String?
+  hostName String?
+  hostPhone String?
+  venueNotes String? @db.Text
 
   city        City         @relation(fields: [cityId], references: [id])
   budgetTiers BudgetTier[]
@@ -184,6 +197,7 @@ model DinnerTable {
   id       String @id @default(cuid())
   dinnerId String
   name     String
+  venueTableLabel String?
 
   dinner   Dinner    @relation(fields: [dinnerId], references: [id], onDelete: Cascade)
   bookings Booking[]

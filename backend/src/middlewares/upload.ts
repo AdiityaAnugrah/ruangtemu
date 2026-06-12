@@ -48,7 +48,8 @@ const qrisStorage = multer.diskStorage({
   },
   filename(_req, file, cb) {
     const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `qris${ext}`);
+    const uniqueName = `qris-${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`;
+    cb(null, uniqueName);
   },
 });
 

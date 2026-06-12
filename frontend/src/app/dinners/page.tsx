@@ -1,116 +1,89 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, MapPin, SearchX, Users } from "lucide-react";
-import { Navbar } from "@/components/layout/Navbar";
-import { Footer } from "@/components/layout/Footer";
+import { CalendarDays, ChevronDown, ChevronRight, MapPin, SearchX } from "lucide-react";
+import { AppBottomNav } from "@/components/layout/AppBottomNav";
 import { citiesApi, dinnersApi } from "@/lib/api";
-import { cn, formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 
 export default function DinnersPage() {
-  const [selectedCity, setSelectedCity] = useState("");
+  const [selectedCityId, setSelectedCityId] = useState("");
 
-  const { data: cities = [] } = useQuery({ queryKey: ["cities"], queryFn: () => citiesApi.list().then((r) => r.data) });
+  const { data: cities = [] } = useQuery({
+    queryKey: ["cities"],
+    queryFn: () => citiesApi.list().then((r) => r.data),
+  });
+
+  useEffect(() => {
+    if (!selectedCityId && cities[0]?.id) setSelectedCityId(cities[0].id);
+  }, [cities, selectedCityId]);
+
   const { data: dinners = [], isLoading } = useQuery({
-    queryKey: ["dinners", selectedCity],
-    queryFn: () => dinnersApi.list({ cityId: selectedCity || undefined }).then((r) => r.data),
+    queryKey: ["dinners", selectedCityId],
+    queryFn: () => dinnersApi.list({ cityId: selectedCityId || undefined }).then((r) => r.data),
   });
 
   return (
-    <>
-      <Navbar />
-      <main className="min-h-screen bg-cream-100 pb-24 md:pb-0">
-        <div className="bg-teal-500 px-4 pb-10 pt-6">
-          <div className="mx-auto max-w-5xl">
-            <h1 className="mb-1 text-2xl font-extrabold text-white">Jadwal Dinner</h1>
-            <p className="text-sm text-teal-200">Pilih dinner di kotamu dan pesan sekarang.</p>
-          </div>
+    <main className="min-h-dvh bg-[#fff1d8] text-slate-950">
+      <div className="mx-auto w-full max-w-[430px] px-7 pb-[calc(env(safe-area-inset-bottom,0px)+96px)] pt-[calc(env(safe-area-inset-top,0px)+32px)]">
+        <p className="text-base font-black text-[#c29254]">Dinner</p>
+        <h1 className="mt-2 text-[30px] font-black leading-tight tracking-[-0.03em]">
+          Pilih jadwal yang cocok
+        </h1>
+
+        <div className="relative mt-7 inline-flex">
+          <MapPin className="pointer-events-none absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-950" />
+          <select
+            value={selectedCityId}
+            onChange={(event) => setSelectedCityId(event.target.value)}
+            className="min-h-[54px] appearance-none rounded-full border-2 border-slate-950 bg-transparent py-3 pl-12 pr-12 text-base font-black outline-none"
+            aria-label="Pilih kota"
+          >
+            {cities.map((city: any) => (
+              <option key={city.id} value={city.id}>
+                {city.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-950" />
         </div>
 
-        <div className="mx-auto -mt-4 max-w-5xl px-4">
-          <div className="mb-5 flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-            <button
-              onClick={() => setSelectedCity("")}
-              className={cn(
-                "min-h-10 flex-shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-all",
-                !selectedCity ? "bg-brand-500 text-white shadow-coral-glow" : "border border-cream-300 bg-white text-brown-600 hover:border-brand-300"
-              )}
-            >
-              Semua
-            </button>
-            {cities.map((city: any) => (
-              <button
-                key={city.id}
-                onClick={() => setSelectedCity(city.id)}
-                className={cn(
-                  "min-h-10 flex-shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-all",
-                  selectedCity === city.id ? "bg-brand-500 text-white shadow-coral-glow" : "border border-cream-300 bg-white text-brown-600 hover:border-brand-300"
-                )}
-              >
-                {city.name}
-              </button>
-            ))}
-          </div>
-
+        <section className="mt-8 space-y-2.5">
           {isLoading ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((i) => <div key={i} className="h-52 animate-pulse rounded-3xl bg-cream-200" />)}
-            </div>
+            [1, 2, 3].map((item) => <div key={item} className="h-[78px] animate-pulse rounded-[30px] bg-white/70" />)
           ) : dinners.length === 0 ? (
-            <div className="rounded-3xl border border-cream-200 bg-white py-16 text-center shadow-warm-sm">
-              <SearchX className="mx-auto mb-4 h-12 w-12 text-brown-300" />
-              <p className="text-lg font-bold text-teal-600">Belum ada dinner</p>
-              <p className="mx-auto mt-1 max-w-xs text-sm leading-6 text-brown-400">Coba pilih kota lain atau request kota di halaman utama.</p>
+            <div className="rounded-[30px] bg-white px-6 py-10 text-center">
+              <SearchX className="mx-auto h-10 w-10 text-[#c29254]" />
+              <p className="mt-4 text-base font-black">Belum ada dinner</p>
+              <p className="mt-2 text-sm font-semibold leading-6 text-[#c29254]">Coba pilih kota lain atau cek lagi nanti.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {dinners.map((dinner: any) => (
-                <Link key={dinner.id} href={`/dinners/${dinner.id}`} className="card-warm group block overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-warm-lg active:scale-[0.98]">
-                  <div className="bg-teal-500 p-5">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="mb-1.5 flex items-center gap-1.5 text-xs text-teal-200">
-                          <MapPin className="h-3 w-3" /> {dinner.city.name}
-                        </div>
-                        <p className="text-lg font-extrabold leading-tight text-white">
-                          {formatDate(dinner.date, { weekday: "short", day: "numeric", month: "short" })}
-                        </p>
-                        <p className="mt-0.5 text-xs text-teal-200">{dinner.startTime} WIB</p>
-                      </div>
-                      <span className={cn("rounded-full px-2 py-1 text-2xs font-semibold", getStatusColor(dinner.status))}>
-                        {getStatusLabel(dinner.status)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-4">
-                    <div className="mb-3 flex items-center gap-1.5 text-xs text-brown-400">
-                      <Users className="h-3.5 w-3.5" /> Maks. {dinner.maxPerTable} orang/meja
-                    </div>
-                    <div className="space-y-1.5">
-                      {dinner.budgetTiers?.map((tier: any) => (
-                        <div key={tier.id} className="flex items-center justify-between rounded-xl bg-cream-100 px-3 py-2">
-                          <span className="text-xs font-medium text-brown-600">{tier.label}</span>
-                          <span className="text-xs font-bold text-teal-600">{formatCurrency(tier.price)}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {dinner.status === "OPEN" && (
-                      <div className="mt-3 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-brand-500">Pesan sekarang</span>
-                        <ChevronRight className="h-4 w-4 text-brand-400 transition-transform group-hover:translate-x-0.5" />
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              ))}
-            </div>
+            dinners.map((dinner: any) => (
+              <Link
+                key={dinner.id}
+                href={`/dinners/${dinner.id}`}
+                className="flex min-h-[78px] items-center rounded-[30px] bg-slate-950 px-6 py-4 text-white active:scale-[0.98]"
+              >
+                <CalendarDays className="mr-4 h-5 w-5 shrink-0 text-cream-100" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-base font-black">
+                    {formatDate(dinner.date, { weekday: "long", day: "numeric", month: "long" })}
+                  </span>
+                  <span className="block text-sm font-black text-cream-100">
+                    {dinner.startTime} WIB
+                    {dinner.budgetTiers?.[0]?.price ? ` - mulai ${formatCurrency(dinner.budgetTiers[0].price)}` : ""}
+                  </span>
+                </span>
+                <ChevronRight className="ml-4 h-5 w-5 shrink-0 text-cream-100" />
+              </Link>
+            ))
           )}
-        </div>
-      </main>
-      <Footer />
-    </>
+        </section>
+      </div>
+
+      <AppBottomNav />
+    </main>
   );
 }

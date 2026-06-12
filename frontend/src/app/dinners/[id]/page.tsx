@@ -5,12 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, CheckCircle, CheckCircle2, MapPin, Users, WalletCards } from "lucide-react";
-import { Navbar } from "@/components/layout/Navbar";
-import { Footer } from "@/components/layout/Footer";
-import { assetUrl, bookingsApi, dinnersApi, settingsApi } from "@/lib/api";
-import { useAuthStore } from "@/stores/authStore";
-import { cn, formatCurrency, formatDate, getStatusColor, getStatusLabel } from "@/lib/utils";
+import { AppBottomNav } from "@/components/layout/AppBottomNav";
 import { confirmAction } from "@/components/ui/toaster";
+import { assetUrl, bookingsApi, dinnersApi, settingsApi } from "@/lib/api";
+import { cn, formatCurrency, formatDate, getStatusLabel } from "@/lib/utils";
+import { useAuthStore } from "@/stores/authStore";
 
 export default function DinnerDetailPage() {
   const { id } = useParams() as { id: string };
@@ -34,171 +33,167 @@ export default function DinnerDetailPage() {
     mutationFn: () => bookingsApi.create({ dinnerId: id, budgetTierId: selectedTier! }),
     onSuccess: (res) => {
       setBookingSuccess(res.data.id);
-      qc.invalidateQueries({ queryKey: ["dinner"] });
+      qc.invalidateQueries({ queryKey: ["dinner", id] });
     },
     meta: { successMessage: "Booking berhasil dibuat", errorTitle: "Booking gagal" },
   });
 
   const handleBook = async () => {
-    if (!isAuthenticated()) { router.push("/auth/login"); return; }
+    if (!isAuthenticated()) {
+      router.push("/auth/login");
+      return;
+    }
     if (!selectedTier) return;
     const tier = dinner.budgetTiers?.find((item: any) => item.id === selectedTier);
     const ok = await confirmAction({
       title: "Pesan dinner?",
-      description: tier ? `Kamu akan membuat booking dengan tier ${tier.label} senilai ${formatCurrency(tier.price)}.` : "Booking akan dibuat untuk jadwal dinner ini.",
+      description: tier ? `Kamu akan membuat booking ${tier.label} senilai ${formatCurrency(tier.price)}.` : "Booking akan dibuat untuk jadwal dinner ini.",
       confirmText: "Pesan",
     });
     if (ok) book.mutate();
   };
 
-  if (isLoading) return (
-    <>
-      <Navbar />
-      <div className="flex min-h-screen items-center justify-center bg-cream-100">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
-      </div>
-      <Footer />
-    </>
-  );
+  if (isLoading) return <Shell><Spinner /></Shell>;
+  if (!dinner) return <Shell><EmptyState title="Dinner tidak ditemukan" /></Shell>;
 
-  if (!dinner) return (
-    <>
-      <Navbar />
-      <div className="flex min-h-screen items-center justify-center bg-cream-100"><p>Dinner tidak ditemukan</p></div>
-      <Footer />
-    </>
-  );
-
-  if (bookingSuccess) return (
-    <>
-      <Navbar />
-      <div className="flex min-h-screen items-center justify-center bg-cream-100 px-4">
-        <div className="card-warm w-full max-w-md p-8 text-center shadow-warm">
-          <CheckCircle className="mx-auto mb-4 h-16 w-16 text-teal-500" />
-          <h2 className="mb-2 text-2xl font-bold text-teal-700">Booking berhasil</h2>
-          <p className="mb-6 text-sm leading-6 text-brown-500">Selesaikan pembayaran QRIS untuk mengunci kursimu.</p>
-          <Link href={`/dashboard/bookings/${bookingSuccess}`} className="btn-primary w-full rounded-xl">
-            Lihat Pembayaran
-          </Link>
-          <Link href="/dashboard" className="mt-3 block text-sm text-brown-400 hover:underline">Ke Dashboard</Link>
+  if (bookingSuccess) {
+    return (
+      <main className="min-h-dvh bg-[#fff1d8] text-slate-950">
+        <div className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col justify-center px-7 pb-[calc(env(safe-area-inset-bottom,0px)+96px)] pt-10 text-center">
+          <CheckCircle className="mx-auto h-16 w-16 text-teal-600" />
+          <h1 className="mt-5 text-[32px] font-black leading-tight tracking-[-0.03em]">Booking berhasil</h1>
+          <p className="mx-auto mt-3 max-w-xs text-sm font-bold leading-6 text-[#c29254]">Selesaikan pembayaran QRIS untuk mengunci kursimu.</p>
+          <Link href={`/dashboard/bookings/${bookingSuccess}`} className="register-primary-button mt-8">Lihat pembayaran</Link>
+          <Link href="/dashboard" className="mt-4 text-sm font-black text-[#c29254]">Ke dashboard</Link>
         </div>
-      </div>
-      <Footer />
-    </>
-  );
+        <AppBottomNav />
+      </main>
+    );
+  }
+
+  const isOpen = dinner.status === "OPEN";
 
   return (
-    <>
-      <Navbar />
-      <main className="min-h-screen bg-cream-100 pb-24 md:pb-0">
-        <div className="bg-teal-500 px-4 pb-12 pt-6">
-          <div className="mx-auto max-w-4xl">
-            <Link href="/dinners" className="mb-5 flex min-h-11 w-fit items-center gap-2 text-sm text-teal-100 hover:text-white">
-              <ArrowLeft className="h-4 w-4" />
-              Jadwal Dinner
-            </Link>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="mb-2 flex items-center gap-2 text-sm text-teal-200">
-                  <MapPin className="h-4 w-4" />
-                  {dinner.city?.name}
-                </div>
-                <h1 className="text-2xl font-extrabold leading-tight text-white">
-                  Dinner {formatDate(dinner.date, { weekday: "long", day: "numeric", month: "long" })}
-                </h1>
-                <p className="mt-2 text-sm font-medium text-brand-200">Mulai pukul {dinner.startTime} WIB</p>
-              </div>
-              <span className={cn("rounded-full px-3 py-1.5 text-xs font-semibold", getStatusColor(dinner.status))}>
-                {getStatusLabel(dinner.status)}
-              </span>
-            </div>
+    <main className="min-h-dvh bg-[#fff1d8] text-slate-950">
+      <div className="mx-auto w-full max-w-[430px] px-7 pb-[calc(env(safe-area-inset-bottom,0px)+96px)] pt-[calc(env(safe-area-inset-top,0px)+20px)]">
+        <Link href="/dinners" className="-ml-3 flex h-12 w-12 items-center justify-center rounded-full active:bg-white/60" aria-label="Kembali">
+          <ArrowLeft className="h-8 w-8 stroke-[3]" />
+        </Link>
+
+        <section className="mt-4 rounded-[34px] bg-slate-950 px-6 py-7 text-white">
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <p className="flex items-center gap-2 text-sm font-black text-brand-200">
+              <MapPin className="h-4 w-4" />
+              {dinner.city?.name ?? "Kota pilihan"}
+            </p>
+            <span className="rounded-full bg-white/10 px-4 py-2 text-xs font-black">{getStatusLabel(dinner.status)}</span>
           </div>
-        </div>
+          <h1 className="text-[32px] font-black leading-tight tracking-[-0.03em]">
+            Dinner {formatDate(dinner.date, { weekday: "long", day: "numeric", month: "long" })}
+          </h1>
+          <p className="mt-3 text-sm font-bold leading-6 text-cream-100">Mulai pukul {dinner.startTime} WIB. Dari yang sebelumnya asing menjadi lebih dekat.</p>
+        </section>
 
-        <div className="mx-auto -mt-7 grid max-w-4xl grid-cols-1 gap-5 px-4 lg:grid-cols-[1fr_320px]">
-          <div className="space-y-5">
-            <div className="card-warm p-5">
-              <div className="grid grid-cols-2 gap-3">
-                <InfoBox icon={Users} label="Ukuran Meja" value={`Maks. ${dinner.maxPerTable} orang`} />
-                <InfoBox icon={MapPin} label="Lokasi" value={dinner.venueName} />
-                <InfoBox icon={CalendarDays} label="Tanggal" value={formatDate(dinner.date, { day: "numeric", month: "short", year: "numeric" })} />
-                <InfoBox icon={WalletCards} label="Pembayaran" value="QRIS" />
-              </div>
-            </div>
+        <section className="mt-4 grid grid-cols-2 gap-3">
+          <InfoBox icon={Users} label="Meja" value={`Maks. ${dinner.maxPerTable} orang`} />
+          <InfoBox icon={CalendarDays} label="Tanggal" value={formatDate(dinner.date, { day: "numeric", month: "short" })} />
+          <InfoBox icon={MapPin} label="Lokasi" value={dinner.venueName ?? "Diumumkan H-1"} />
+          <InfoBox icon={WalletCards} label="Bayar" value="QRIS" />
+        </section>
 
-            <div className="card-warm p-5">
-              <h3 className="mb-4 font-bold text-teal-700">Yang sudah termasuk</h3>
-              <ul className="space-y-3 text-sm text-brown-600">
-                {[
-                  "Makanan dan minuman sesuai tier",
-                  "Matching dengan peserta lain berdasarkan minat",
-                  "Meja kecil agar percakapan lebih nyaman",
-                  "Lokasi restoran pilihan yang diumumkan H-1",
-                ].map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-500" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="card-warm p-5">
-              <h3 className="mb-4 font-bold text-teal-700">Pilih Budget Tier</h3>
-              <div className="space-y-3">
-                {dinner.budgetTiers?.map((tier: any) => (
-                  <button
-                    key={tier.id}
-                    type="button"
-                    onClick={() => setSelectedTier(tier.id)}
-                    className={cn(
-                      "min-h-16 w-full rounded-2xl border-2 p-4 text-left transition-all",
-                      selectedTier === tier.id ? "border-brand-500 bg-brand-50" : "border-cream-300 bg-white hover:border-brand-300"
-                    )}
-                  >
-                    <div className="font-semibold text-teal-700">{tier.label}</div>
-                    <div className="mt-1 text-lg font-bold text-brand-600">{formatCurrency(tier.price)}</div>
-                  </button>
-                ))}
-              </div>
-
-              {book.error && (
-                <div className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
-                  {(book.error as any).response?.data?.message ?? "Booking gagal"}
-                </div>
-              )}
-
-              <button onClick={handleBook} disabled={!selectedTier || dinner.status !== "OPEN" || book.isPending} className="btn-primary mt-4 w-full rounded-xl">
-                {book.isPending ? "Memproses..." : dinner.status !== "OPEN" ? getStatusLabel(dinner.status) : "Pesan Sekarang"}
+        <section className="mt-4 rounded-[32px] bg-white px-6 py-6">
+          <h2 className="text-xl font-black tracking-[-0.02em]">Pilih budget</h2>
+          <div className="mt-5 space-y-3">
+            {dinner.budgetTiers?.map((tier: any) => (
+              <button
+                key={tier.id}
+                type="button"
+                onClick={() => setSelectedTier(tier.id)}
+                className={cn(
+                  "w-full rounded-[26px] px-5 py-5 text-left active:scale-[0.98]",
+                  selectedTier === tier.id ? "bg-slate-950 text-white" : "bg-[#fff1d8] text-slate-950"
+                )}
+              >
+                <span className="block text-base font-black">{tier.label}</span>
+                <span className={cn("mt-1 block text-xl font-black", selectedTier === tier.id ? "text-brand-200" : "text-[#c29254]")}>
+                  {formatCurrency(tier.price)}
+                </span>
               </button>
-
-              <p className="mt-3 text-center text-xs text-brown-400">Pembayaran via QRIS. Batas bayar 24 jam.</p>
-            </div>
-
-            {settings?.qris_image_url && (
-              <div className="card-warm p-5 text-center">
-                <p className="mb-3 text-sm font-medium text-brown-500">QRIS Pembayaran</p>
-                <img src={assetUrl(settings.qris_image_url)} alt="QRIS" className="mx-auto h-32 w-32 object-contain" />
-              </div>
-            )}
+            ))}
           </div>
-        </div>
-      </main>
-      <Footer />
-    </>
+
+          {book.error && (
+            <div className="mt-4 rounded-[24px] bg-red-50 px-5 py-4 text-sm font-bold leading-6 text-red-600">
+              {(book.error as any).response?.data?.message ?? "Booking gagal"}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleBook}
+            disabled={!selectedTier || !isOpen || book.isPending}
+            className="register-primary-button mt-5 disabled:opacity-60"
+          >
+            {book.isPending ? "Memproses..." : !isOpen ? getStatusLabel(dinner.status) : "Pesan sekarang"}
+          </button>
+          <p className="mt-3 text-center text-xs font-bold leading-5 text-[#c29254]">Pembayaran via QRIS. Batas bayar 24 jam.</p>
+        </section>
+
+        <section className="mt-4 rounded-[32px] bg-white px-6 py-6">
+          <h2 className="text-xl font-black tracking-[-0.02em]">Yang kamu dapat</h2>
+          <div className="mt-5 space-y-4">
+            {[
+              "Makanan dan minuman sesuai tier",
+              "Matching dengan peserta lain berdasarkan minat",
+              "Meja kecil agar percakapan terasa nyaman",
+              "Lokasi restoran pilihan yang diumumkan H-1",
+            ].map((item) => (
+              <p key={item} className="flex items-start gap-3 text-sm font-bold leading-6 text-[#c29254]">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 flex-shrink-0 text-teal-600" />
+                {item}
+              </p>
+            ))}
+          </div>
+        </section>
+
+        {settings?.qris_image_url && (
+          <section className="mt-4 rounded-[32px] bg-white px-6 py-6 text-center">
+            <p className="mb-3 text-sm font-black text-[#c29254]">QRIS pembayaran</p>
+            <img src={assetUrl(settings.qris_image_url)} alt="QRIS" className="mx-auto h-36 w-36 rounded-[24px] bg-[#fff1d8] object-contain p-3" />
+          </section>
+        )}
+      </div>
+
+      <AppBottomNav />
+    </main>
   );
 }
 
-function InfoBox({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl bg-cream-100 p-4">
-      <div className="mb-1 flex items-center gap-2 text-xs text-brown-400">
+    <main className="min-h-dvh bg-[#fff1d8] text-slate-950">
+      <div className="mx-auto flex min-h-dvh w-full max-w-[430px] items-center justify-center px-7 pb-28 pt-10">{children}</div>
+      <AppBottomNav />
+    </main>
+  );
+}
+
+function Spinner() {
+  return <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />;
+}
+
+function EmptyState({ title }: { title: string }) {
+  return <p className="text-center text-base font-black text-[#c29254]">{title}</p>;
+}
+
+function InfoBox({ icon: Icon, label, value }: { icon: any; label: string; value: any }) {
+  return (
+    <div className="rounded-[28px] bg-white px-5 py-5">
+      <div className="flex items-center gap-2 text-xs font-black text-[#c29254]">
         <Icon className="h-4 w-4 text-brand-500" />
         {label}
       </div>
-      <p className="text-sm font-semibold text-teal-700">{value}</p>
+      <p className="mt-2 text-sm font-black leading-5 text-slate-950">{value}</p>
     </div>
   );
 }

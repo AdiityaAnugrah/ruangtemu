@@ -90,7 +90,16 @@ export const dinnersApi = {
   create: (data: unknown) => api.post("/dinners", data),
   update: (id: string, data: unknown) => api.put(`/dinners/${id}`, data),
   updateStatus: (id: string, status: string) => api.patch(`/dinners/${id}/status`, { status }),
-  reveal: (id: string, data: { venueName: string; venueAddress: string }) => api.patch(`/dinners/${id}/reveal`, data),
+  reveal: (id: string, data: {
+    venueName: string;
+    venueAddress: string;
+    arrivalTime: string;
+    reservationName: string;
+    hostName?: string;
+    hostPhone?: string;
+    venueNotes?: string;
+    tables?: { id: string; venueTableLabel?: string }[];
+  }) => api.patch(`/dinners/${id}/reveal`, data),
   delete: (id: string) => api.delete(`/dinners/${id}`),
 };
 

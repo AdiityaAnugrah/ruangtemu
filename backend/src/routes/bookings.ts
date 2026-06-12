@@ -107,6 +107,11 @@ router.get("/:id", authenticate, async (req: AuthRequest, res: Response) => {
   if (dinner.status !== "CONFIRMED" && dinner.status !== "COMPLETED") {
     dinner.venueName = "Akan diumumkan H-1";
     dinner.venueAddress = null;
+    dinner.arrivalTime = null;
+    dinner.reservationName = null;
+    dinner.hostName = null;
+    dinner.hostPhone = null;
+    dinner.venueNotes = null;
   }
 
   res.json(booking);

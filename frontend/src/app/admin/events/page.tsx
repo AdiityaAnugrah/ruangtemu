@@ -138,6 +138,19 @@ export default function AdminEventsPage() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-8">
+        <div className="mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-950">Event Khusus</h2>
+            <p className="mt-1 text-sm text-slate-500">Buat event, upload poster, dan atur status registrasi.</p>
+          </div>
+          <button
+            onClick={() => setShowCreate((value) => !value)}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            <Plus className="h-4 w-4" /> Buat Event
+          </button>
+        </div>
+
         {showCreate && (
           <form
             onSubmit={(e) => { e.preventDefault(); create.mutate(); }}

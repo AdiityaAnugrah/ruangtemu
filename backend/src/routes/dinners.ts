@@ -14,6 +14,11 @@ const dinnerSchema = z.object({
   maxPerTable: z.number().int().min(2).max(10).optional(),
   venueName: z.string().optional().nullable(),
   venueAddress: z.string().optional().nullable(),
+  arrivalTime: z.string().optional().nullable(),
+  reservationName: z.string().optional().nullable(),
+  hostName: z.string().optional().nullable(),
+  hostPhone: z.string().optional().nullable(),
+  venueNotes: z.string().optional().nullable(),
   budgetTiers: z.array(z.object({
     label: z.string().min(1),
     price: z.number().int().positive(),
@@ -42,11 +47,19 @@ router.get("/", async (req: Request, res: Response) => {
     orderBy: { date: "asc" },
   });
 
-  res.json(dinners.map((d) => ({
-    ...d,
-    venueName: d.status === "CONFIRMED" || d.status === "COMPLETED" ? d.venueName : "Akan diumumkan H-1",
-    venueAddress: d.status === "CONFIRMED" || d.status === "COMPLETED" ? d.venueAddress : null,
-  })));
+  res.json(dinners.map((d) => {
+    const isRevealed = d.status === "CONFIRMED" || d.status === "COMPLETED";
+    return {
+      ...d,
+      venueName: isRevealed ? d.venueName : "Akan diumumkan H-1",
+      venueAddress: isRevealed ? d.venueAddress : null,
+      arrivalTime: isRevealed ? d.arrivalTime : null,
+      reservationName: isRevealed ? d.reservationName : null,
+      hostName: isRevealed ? d.hostName : null,
+      hostPhone: isRevealed ? d.hostPhone : null,
+      venueNotes: isRevealed ? d.venueNotes : null,
+    };
+  }));
 });
 
 // GET /api/dinners/all (admin - semua dinner)
@@ -79,6 +92,11 @@ router.get("/:id", async (req: Request, res: Response) => {
     ...dinner,
     venueName: isRevealed ? dinner.venueName : "Akan diumumkan H-1",
     venueAddress: isRevealed ? dinner.venueAddress : null,
+    arrivalTime: isRevealed ? dinner.arrivalTime : null,
+    reservationName: isRevealed ? dinner.reservationName : null,
+    hostName: isRevealed ? dinner.hostName : null,
+    hostPhone: isRevealed ? dinner.hostPhone : null,
+    venueNotes: isRevealed ? dinner.venueNotes : null,
   });
 });
 
@@ -130,16 +148,39 @@ router.patch("/:id/status", authenticate, requireAdmin, async (req: AuthRequest,
 
 // PATCH /api/dinners/:id/reveal (admin - reveal lokasi H-1)
 router.patch("/:id/reveal", authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
-  const { venueName, venueAddress } = z.object({
-    venueName: z.string(),
-    venueAddress: z.string(),
+  const { venueName, venueAddress, arrivalTime, reservationName, hostName, hostPhone, venueNotes, tables } = z.object({
+    venueName: z.string().trim().min(2),
+    venueAddress: z.string().trim().min(5),
+    arrivalTime: z.string().trim().min(2),
+    reservationName: z.string().trim().min(2),
+    hostName: z.string().trim().optional().nullable(),
+    hostPhone: z.string().trim().optional().nullable(),
+    venueNotes: z.string().trim().optional().nullable(),
+    tables: z.array(z.object({
+      id: z.string(),
+      venueTableLabel: z.string().trim().optional().nullable(),
+    })).optional(),
   }).parse(req.body);
+
+  if (tables?.length) {
+    await prisma.$transaction(
+      tables.map((table) => prisma.dinnerTable.update({
+        where: { id: table.id },
+        data: { venueTableLabel: table.venueTableLabel || null },
+      }))
+    );
+  }
 
   const dinner = await prisma.dinner.update({
     where: { id: req.params.id },
     data: {
       venueName,
       venueAddress,
+      arrivalTime,
+      reservationName,
+      hostName: hostName || null,
+      hostPhone: hostPhone || null,
+      venueNotes: venueNotes || null,
       revealedAt: new Date(),
       status: "CONFIRMED",
     },
@@ -155,11 +196,16 @@ router.patch("/:id/reveal", authenticate, requireAdmin, async (req: AuthRequest,
   for (const booking of bookings) {
     try {
       const sent = await notificationService.sendLocationReveal(booking.user, {
-        id: dinner.id,
-        date: dinner.date,
-        city: dinner.city,
-        venueName,
-        venueAddress,
+          id: dinner.id,
+          date: dinner.date,
+          city: dinner.city,
+          venueName,
+          venueAddress,
+          arrivalTime,
+          reservationName,
+          hostName: hostName || null,
+          hostPhone: hostPhone || null,
+          venueNotes: venueNotes || null,
       });
       if (sent) notificationsSent++;
     } catch (err) {

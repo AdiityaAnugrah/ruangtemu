@@ -28,6 +28,11 @@ export default function AdminMatchingPage() {
     queryFn: () => dinnersApi.listAll().then((r) => r.data.filter((d: any) => ["OPEN", "MATCHING"].includes(d.status))),
   });
 
+  useEffect(() => {
+    const dinnerId = new URLSearchParams(window.location.search).get("dinnerId");
+    if (dinnerId) setSelectedDinner(dinnerId);
+  }, []);
+
   const previewMutation = useMutation({
     mutationFn: (dinnerId: string) => matchingApi.preview(dinnerId),
     onSuccess: (res) => setPreview(res.data),
@@ -122,7 +127,12 @@ export default function AdminMatchingPage() {
             <div className="space-y-4">
               {preview.tables.map((table: any, i: number) => (
                 <div key={i} className="rounded-xl bg-gray-50 p-4">
-                  <p className="mb-3 font-semibold text-gray-800">Meja {i + 1} ({table.participants.length} orang)</p>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-semibold text-gray-800">Meja {i + 1} ({table.participants.length} orang)</p>
+                    {typeof table.tableScore === "number" && (
+                      <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-semibold text-teal-700">Skor {table.tableScore}</span>
+                    )}
+                  </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                     {table.participants.map((participant: any) => (
                       <div key={participant.userId} className="rounded-xl border bg-white p-3">
@@ -138,6 +148,20 @@ export default function AdminMatchingPage() {
                             {participant.interests.slice(0, 3).map((interest: string) => (
                               <span key={interest} className="rounded-full bg-brand-100 px-2 py-0.5 text-xs text-brand-600">{interest}</span>
                             ))}
+                          </div>
+                        )}
+                        {participant.matchProfile && (
+                          <div className="mt-2 space-y-1 text-xs text-gray-500">
+                            {[participant.matchProfile.activity, participant.matchProfile.industry].filter(Boolean).length > 0 && (
+                              <p>{[participant.matchProfile.activity, participant.matchProfile.industry].filter(Boolean).join(" · ")}</p>
+                            )}
+                            {participant.matchProfile.socialComfort && <p>Nyaman ngobrol: {participant.matchProfile.socialComfort}/5</p>}
+                            {participant.matchProfile.conversationTopics?.length > 0 && (
+                              <p>Topik: {participant.matchProfile.conversationTopics.slice(0, 3).join(", ")}</p>
+                            )}
+                            {participant.matchProfile.leisureTopics?.length > 0 && (
+                              <p>Waktu luang: {participant.matchProfile.leisureTopics.slice(0, 3).join(", ")}</p>
+                            )}
                           </div>
                         )}
                       </div>

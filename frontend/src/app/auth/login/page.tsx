@@ -8,24 +8,27 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { z } from "zod";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { GoogleRedirectButton } from "@/components/auth/GoogleRedirectButton";
+import { BrandLogo } from "@/components/ui/brand-mark";
 import { authApi } from "@/lib/api";
 import { useAuthStore } from "@/stores/authStore";
-import { BrandLogo } from "@/components/ui/brand-mark";
-import { GoogleRedirectButton } from "@/components/auth/GoogleRedirectButton";
 
 const schema = z.object({
   email: z.string().email("Email tidak valid"),
   password: z.string().min(1, "Password wajib diisi"),
 });
+
 type FormData = z.infer<typeof schema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const setAuth = useAuthStore((s) => s.setAuth);
+  const setAuth = useAuthStore((state) => state.setAuth);
   const [showPass, setShowPass] = useState(false);
-  const [verificationEmail, setVerificationEmail] = useState("");
-  const [verificationCode, setVerificationCode] = useState("");
-  const { register, handleSubmit, getValues, formState: { errors } } = useForm<FormData>({ resolver: zodResolver(schema) });
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<FormData>({ resolver: zodResolver(schema) });
 
   const login = useMutation({
     mutationFn: (data: FormData) => authApi.login(data),
@@ -34,131 +37,101 @@ export default function LoginPage() {
       setAuth(user, accessToken, refreshToken);
       router.push(user.role === "ADMIN" ? "/admin" : "/dashboard");
     },
-    onError: (error: any) => {
-      if (error?.response?.data?.requiresVerification) {
-        setVerificationEmail(error.response.data.email ?? getValues("email"));
-      }
-    },
     meta: { successMessage: "Login berhasil", errorTitle: "Login gagal" },
-  });
-
-  const verifyEmail = useMutation({
-    mutationFn: () => authApi.verifyEmail({ email: verificationEmail, code: verificationCode }),
-    onSuccess: (res) => {
-      const { user, accessToken, refreshToken } = res.data;
-      setAuth(user, accessToken, refreshToken);
-      router.push(user.role === "ADMIN" ? "/admin" : "/dashboard");
-    },
-    meta: { successMessage: "Email berhasil diverifikasi", errorTitle: "Verifikasi email gagal" },
-  });
-
-  const resendVerification = useMutation({
-    mutationFn: () => authApi.resendVerification(verificationEmail),
-    meta: { successMessage: "Kode verifikasi dikirim ulang", errorTitle: "Gagal mengirim kode" },
   });
 
   const loginError = login.error as any;
   const loginErrorMessage = loginError
-    ? loginError.response?.data?.message ?? "Tidak bisa terhubung ke server. Pastikan API backend berjalan."
+    ? loginError.response?.data?.message ?? "Tidak bisa terhubung ke server."
     : null;
 
   return (
-    <div className="flex min-h-screen flex-col bg-cream-100">
-      <div className="flex items-center justify-between px-4 py-4">
-        <Link href="/" className="flex min-h-11 items-center gap-1.5 text-sm text-brown-500 transition-colors hover:text-teal-600">
-          <ArrowLeft className="h-4 w-4" /> Beranda
-        </Link>
-        <Link href="/" className="flex min-h-11 items-center gap-1.5">
-          <BrandLogo className="h-12 w-12 bg-transparent" />
-        </Link>
-      </div>
+    <main className="min-h-dvh bg-[#fff1d8] text-slate-950">
+      <div className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col px-5 pb-[calc(env(safe-area-inset-bottom,0px)+24px)] pt-[calc(env(safe-area-inset-top,0px)+18px)]">
+        <header className="flex h-12 items-center justify-between">
+          <Link
+            href="/"
+            className="-ml-2 flex h-12 w-12 items-center justify-center rounded-full text-slate-950 active:bg-white/50"
+            aria-label="Kembali"
+          >
+            <ArrowLeft className="h-9 w-9 stroke-[3]" />
+          </Link>
+          <Link href="/auth/register" className="rounded-full px-3 py-2 text-sm font-bold text-[#c29254]">
+            Daftar
+          </Link>
+        </header>
 
-      <div className="flex flex-1 items-center justify-center px-4 py-8">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 text-center">
-            <BrandLogo className="mx-auto mb-4 h-36 w-36 bg-transparent" />
-            <h1 className="text-2xl font-extrabold text-teal-600">Selamat datang</h1>
-            <p className="mt-1.5 text-sm text-brown-400">
-              Belum punya akun?{" "}
-              <Link href="/auth/register" className="font-semibold text-brand-500 hover:underline">Daftar gratis</Link>
+        <section className="flex flex-1 flex-col justify-center py-8">
+          <div className="mb-9 text-center">
+            <BrandLogo className="mx-auto h-24 w-24 bg-transparent" />
+            <h1 className="mt-6 text-[31px] font-black leading-tight tracking-[-0.03em]">Masuk ke RuangTemu</h1>
+            <p className="mx-auto mt-3 max-w-xs text-sm font-semibold leading-6 text-[#c29254]">
+              Lanjutkan cerita baik, persahabatan, dan pertemuan baru kamu.
             </p>
           </div>
 
-          <div className="card-warm p-6 shadow-warm">
-            <GoogleRedirectButton />
-            {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
-              <div className="my-5 flex items-center gap-3">
-                <span className="h-px flex-1 bg-cream-200" />
-                <span className="text-xs font-medium text-brown-300">atau</span>
-                <span className="h-px flex-1 bg-cream-200" />
-              </div>
-            )}
+          <GoogleRedirectButton />
 
-            <form onSubmit={handleSubmit((d) => login.mutate(d))} className="space-y-4">
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-brown-600">Email</label>
-                <input {...register("email")} type="email" placeholder="kamu@email.com" className="input-warm" autoComplete="email" />
-                {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
-              </div>
+          {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+            <div className="my-6 flex items-center gap-3">
+              <span className="h-px flex-1 bg-white" />
+              <span className="text-xs font-bold text-[#c29254]">atau masuk dengan email</span>
+              <span className="h-px flex-1 bg-white" />
+            </div>
+          )}
 
-              <div>
-                <label className="mb-1.5 block text-xs font-semibold text-brown-600">Password</label>
-                <div className="relative">
-                  <input {...register("password")} type={showPass ? "text" : "password"} placeholder="Masukkan password" className="input-warm pr-11" autoComplete="current-password" />
-                  <button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-brown-400 hover:text-brown-600" aria-label={showPass ? "Sembunyikan password" : "Tampilkan password"}>
-                    {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
-                {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
-              </div>
+          <form onSubmit={handleSubmit((data) => login.mutate(data))} className="space-y-6">
+            <div>
+              <label className="mb-3 block text-[15px] font-bold text-[#c29254]">Email</label>
+              <input
+                {...register("email")}
+                type="email"
+                className="register-pill-input"
+                autoComplete="email"
+                placeholder="kamu@email.com"
+              />
+              {errors.email && <ErrorText message={errors.email.message} />}
+            </div>
 
-              {login.error && (
-                <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-600">
-                  {loginErrorMessage}
-                </div>
-              )}
-
-              <button type="submit" disabled={login.isPending} className="btn-primary mt-2 w-full py-3">
-                {login.isPending ? "Masuk..." : "Masuk"}
-              </button>
-            </form>
-
-            {verificationEmail && (
-              <div className="mt-5 rounded-2xl border border-brand-100 bg-brand-50 p-4">
-                <p className="text-sm font-bold text-teal-700">Verifikasi email</p>
-                <p className="mt-1 text-xs leading-5 text-brown-500">
-                  Masukkan kode 6 digit yang dikirim ke {verificationEmail}.
-                </p>
-                <div className="mt-3 flex gap-2">
-                  <input
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    inputMode="numeric"
-                    placeholder="123456"
-                    className="input-warm flex-1 text-center text-base font-bold tracking-[0.25em]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => verifyEmail.mutate()}
-                    disabled={verificationCode.length !== 6 || verifyEmail.isPending}
-                    className="min-h-11 rounded-xl bg-teal-500 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-50"
-                  >
-                    Verifikasi
-                  </button>
-                </div>
+            <div>
+              <label className="mb-3 block text-[15px] font-bold text-[#c29254]">Password</label>
+              <div className="relative">
+                <input
+                  {...register("password")}
+                  type={showPass ? "text" : "password"}
+                  className="register-pill-input pr-16"
+                  autoComplete="current-password"
+                  placeholder="Password kamu"
+                />
                 <button
                   type="button"
-                  onClick={() => resendVerification.mutate()}
-                  disabled={resendVerification.isPending}
-                  className="mt-2 text-xs font-semibold text-brand-600 hover:underline disabled:opacity-50"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-[#c29254] active:bg-[#fff1d8]"
+                  aria-label={showPass ? "Sembunyikan password" : "Tampilkan password"}
                 >
-                  Kirim ulang kode
+                  {showPass ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
+              {errors.password && <ErrorText message={errors.password.message} />}
+            </div>
+
+            {loginErrorMessage && (
+              <div className="rounded-[24px] border border-red-100 bg-white px-5 py-4 text-sm font-semibold leading-6 text-red-600">
+                {loginErrorMessage}
+              </div>
             )}
-          </div>
-        </div>
+
+            <button type="submit" disabled={login.isPending} className="register-primary-button">
+              {login.isPending ? "Masuk..." : "Masuk"}
+            </button>
+          </form>
+        </section>
       </div>
-    </div>
+    </main>
   );
+}
+
+function ErrorText({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="mt-2 text-sm font-bold leading-5 text-red-600">{message}</p>;
 }

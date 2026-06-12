@@ -14,6 +14,14 @@ const updateProfileSchema = z.object({
   birthDate: z.string().datetime().optional().nullable(),
   city: z.string().optional().nullable(),
   bio: z.string().max(500).optional().nullable(),
+  activity: z.string().max(80).optional().nullable(),
+  industry: z.string().max(120).optional().nullable(),
+  socialComfort: z.number().int().min(1).max(5).optional().nullable(),
+  leisureTopics: z.array(z.string().max(80)).max(3).optional().nullable(),
+  conversationTopics: z.array(z.string().max(80)).max(3).optional().nullable(),
+  smokes: z.boolean().optional().nullable(),
+  drinksAlcohol: z.boolean().optional().nullable(),
+  dietaryNotes: z.string().max(500).optional().nullable(),
   interestIds: z.array(z.string()).min(3, "Pilih minimal 3 minat").optional(),
 });
 
@@ -77,6 +85,9 @@ router.patch("/me", authenticate, async (req: AuthRequest, res: Response) => {
     select: {
       id: true, email: true, name: true, phone: true,
       gender: true, birthDate: true, city: true, bio: true,
+      activity: true, industry: true, socialComfort: true,
+      leisureTopics: true, conversationTopics: true,
+      smokes: true, drinksAlcohol: true, dietaryNotes: true,
       avatarUrl: true, role: true,
       interests: { include: { interest: true } },
     },
@@ -93,6 +104,7 @@ router.get("/", authenticate, requireAdmin, async (_req: AuthRequest, res: Respo
     select: {
       id: true, email: true, name: true, phone: true,
       gender: true, city: true, role: true, isVerified: true, isSuspended: true,
+      activity: true, industry: true, socialComfort: true,
       createdAt: true,
       _count: { select: { bookings: true } },
     },
@@ -108,6 +120,9 @@ router.get("/:id", authenticate, requireAdmin, async (req: AuthRequest, res: Res
     select: {
       id: true, email: true, name: true, phone: true,
       gender: true, birthDate: true, city: true, bio: true, avatarUrl: true,
+      activity: true, industry: true, socialComfort: true,
+      leisureTopics: true, conversationTopics: true,
+      smokes: true, drinksAlcohol: true, dietaryNotes: true,
       role: true, isVerified: true, isSuspended: true, createdAt: true,
       interests: { include: { interest: true } },
       bookings: { include: { dinner: { include: { city: true } }, budgetTier: true, payment: true }, orderBy: { createdAt: "desc" }, take: 10 },

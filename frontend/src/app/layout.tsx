@@ -10,12 +10,12 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "RuangTemu - Satu Meja, Enam Cerita",
-  description: "Platform social dining yang mempertemukan orang baru dalam makan malam grup kecil yang bermakna.",
+  title: "RuangTemu - Dari Asing Jadi Lebih Dekat",
+  description: "Ruang untuk membantu orang saling mengenal dan membangun kedekatan melalui percakapan serta pengalaman bersama.",
   keywords: ["social dining", "networking", "dinner", "ruangtemu"],
   openGraph: {
-    title: "RuangTemu - Satu Meja, Enam Cerita",
-    description: "Bergabunglah dalam dinner seru bersama orang-orang baru yang dipilihkan khusus untukmu.",
+    title: "RuangTemu - Dari Asing Jadi Lebih Dekat",
+    description: "Temukan cerita baik, persahabatan, kolaborasi, kesempatan, dan perjalanan hidup baru bersama RuangTemu.",
     siteName: "RuangTemu",
     type: "website",
   },

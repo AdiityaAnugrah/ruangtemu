@@ -108,6 +108,24 @@
            transition-all;
   }
 
+  .register-pill-input {
+    @apply min-h-[76px] w-full rounded-[30px] border-0 bg-white px-6 text-base font-semibold text-slate-950
+           placeholder:text-[#e0bd8b] outline-none shadow-none
+           focus:ring-4 focus:ring-[#d7a072]/25;
+  }
+
+  .register-primary-button {
+    @apply flex min-h-[78px] w-full items-center justify-center rounded-[30px]
+           bg-gradient-to-r from-[#d89b73] to-[#bd879d]
+           px-6 text-lg font-black text-white shadow-none transition-transform
+           active:scale-[0.98] disabled:cursor-not-allowed disabled:from-[#998f86] disabled:to-[#998f86] disabled:opacity-100;
+  }
+
+  .register-dark-choice {
+    @apply flex min-h-[78px] w-full items-center justify-center rounded-[30px] px-5
+           text-center text-lg font-black transition-colors active:scale-[0.98];
+  }
+
   /* Section heading */
   .section-tag {
     @apply inline-flex items-center gap-1.5 rounded-full bg-brand-100 px-4 py-1.5 text-xs font-semibold text-brand-600 uppercase;
@@ -119,5 +137,21 @@
   }
   .bottom-nav-item.active {
     @apply text-brand-500;
+  }
+
+  .admin-shell-page > div {
+    min-height: 0;
+    background: transparent;
+  }
+
+  .admin-shell-page > div > header {
+    display: none;
+  }
+
+  .admin-shell-page > div > main,
+  .admin-shell-page > div > div {
+    max-width: none;
+    margin: 0;
+    padding: 0;
   }
 }

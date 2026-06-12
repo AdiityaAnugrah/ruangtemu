@@ -28,6 +28,9 @@ const PORT = parseInt(process.env.PORT || "3200");
 const HOST = process.env.HOST || "127.0.0.1";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3201";
 
+// Production traffic reaches Express through Apache/Cloudflare.
+app.set("trust proxy", 1);
+
 // Security
 app.use(helmet());
 app.use(cors({
@@ -47,7 +50,15 @@ app.use(express.urlencoded({ extended: true }));
 
 // Static uploads
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "./uploads";
-app.use("/uploads", express.static(path.resolve(UPLOAD_DIR)));
+const uploadRoot = path.resolve(UPLOAD_DIR);
+app.use(
+  "/uploads",
+  express.static(uploadRoot, {
+    setHeaders(res) {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    },
+  })
+);
 
 // Routes
 app.use("/auth", authLimiter, wrapAsyncRouter(authRouter));

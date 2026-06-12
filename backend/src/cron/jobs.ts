@@ -57,6 +57,11 @@ async function sendLocationRevealNotifications() {
           city: dinner.city,
           venueName: dinner.venueName,
           venueAddress: dinner.venueAddress,
+          arrivalTime: dinner.arrivalTime || dinner.startTime,
+          reservationName: dinner.reservationName || "RuangTemu",
+          hostName: dinner.hostName,
+          hostPhone: dinner.hostPhone,
+          venueNotes: dinner.venueNotes,
         });
       } catch (err) {
         logger.error({ err }, "Failed to send location reveal notification");

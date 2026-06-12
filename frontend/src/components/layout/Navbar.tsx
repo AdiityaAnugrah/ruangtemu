@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Bell, CalendarDays, ChevronDown, Compass, Home, Menu, Settings, User, X } from "lucide-react";
+import { Bell, CalendarDays, ChevronDown, Home, Menu, Settings, User, X } from "lucide-react";
 import { useAuthStore } from "@/stores/authStore";
 import { BrandMark } from "@/components/ui/brand-mark";
 import { cn } from "@/lib/utils";
@@ -202,29 +202,38 @@ export function Navbar() {
 }
 
 function BottomNav({ pathname, isAuthenticated }: { pathname: string; isAuthenticated: boolean }) {
-  const items = [
-    { href: "/", icon: Home, label: "Beranda" },
-    { href: "/dinners", icon: CalendarDays, label: "Dinner" },
-    { href: "/events", icon: Compass, label: "Event" },
-    { href: isAuthenticated ? "/dashboard" : "/auth/login", icon: User, label: isAuthenticated ? "Akun" : "Masuk" },
-  ];
+  const items = isAuthenticated
+    ? [
+        { href: "/dashboard", icon: Home, label: "Beranda", match: (path: string) => path === "/dashboard" },
+        { href: "/dashboard/bookings", icon: CalendarDays, label: "Aktivitas", match: (path: string) => path.startsWith("/dashboard/bookings") },
+        { href: "/dashboard/profile", icon: User, label: "Profil Saya", match: (path: string) => path.startsWith("/dashboard/profile") },
+      ]
+    : [
+        { href: "/", icon: Home, label: "Beranda", match: (path: string) => path === "/" },
+        { href: "/dinners", icon: CalendarDays, label: "Dinner", match: (path: string) => path.startsWith("/dinners") },
+        { href: "/auth/login", icon: User, label: "Masuk", match: (path: string) => path.startsWith("/auth") },
+      ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-cream-200 bg-white shadow-[0_-4px_20px_rgba(153,126,101,0.1)] md:hidden">
-      <div className="grid grid-cols-4">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#ead5b5] bg-[#fff1d8]/95 backdrop-blur md:hidden">
+      <div className="mx-auto grid max-w-[430px] grid-cols-3 px-4 pb-[calc(env(safe-area-inset-bottom,0px)+8px)] pt-3">
         {items.map((item) => {
-          const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+          const isActive = item.match(pathname);
           return (
-            <Link key={item.href} href={item.href} className={cn("bottom-nav-item min-h-14", isActive && "active")}>
-              <item.icon className={cn("h-5 w-5 transition-colors", isActive ? "text-brand-500" : "text-brown-400")} />
-              <span className={cn("text-2xs transition-colors", isActive ? "font-semibold text-brand-600" : "text-brown-400")}>
-                {item.label}
-              </span>
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-black",
+                isActive ? "text-slate-950" : "text-[#d7c29f]"
+              )}
+            >
+              <item.icon className="h-7 w-7" fill={isActive ? "currentColor" : "none"} />
+              <span>{item.label}</span>
             </Link>
           );
         })}
       </div>
-      <div className="h-safe-bottom" />
     </nav>
   );
 }

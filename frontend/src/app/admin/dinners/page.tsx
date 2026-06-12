@@ -4,10 +4,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { adminApi, dinnersApi, citiesApi } from "@/lib/api";
+import { adminApi, dinnersApi, citiesApi, matchingApi } from "@/lib/api";
 import { useAuthStore } from "@/stores/authStore";
 import { formatDate, formatCurrency, getStatusLabel, getStatusColor, cn } from "@/lib/utils";
-import { ArrowLeft, Plus, Eye, MapPin, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Eye, MapPin, Trash2, XCircle } from "lucide-react";
 import { confirmAction } from "@/components/ui/toaster";
 
 const defaultTierTemplate = [
@@ -48,7 +48,16 @@ export default function AdminDinnersPage() {
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [showReveal, setShowReveal] = useState<string | null>(null);
-  const [revealData, setRevealData] = useState({ venueName: "", venueAddress: "" });
+  const [revealData, setRevealData] = useState({
+    venueName: "",
+    venueAddress: "",
+    arrivalTime: "",
+    reservationName: "",
+    hostName: "",
+    hostPhone: "",
+    venueNotes: "",
+  });
+  const [tableLabels, setTableLabels] = useState<Record<string, string>>({});
   const [form, setForm] = useState(emptyDinnerForm());
 
   useEffect(() => {
@@ -73,6 +82,23 @@ export default function AdminDinnersPage() {
   });
   const configuredTiers = parseDefaultTiers(settings.default_budget_tiers);
 
+  const { data: matchedTables = [] } = useQuery({
+    queryKey: ["matching-tables", showReveal],
+    queryFn: () => matchingApi.tables(showReveal!).then((r) => r.data),
+    enabled: !!showReveal,
+  });
+
+  useEffect(() => {
+    if (!showReveal || matchedTables.length === 0) return;
+    setTableLabels((current) => {
+      const next = { ...current };
+      matchedTables.forEach((table: any) => {
+        if (next[table.id] === undefined) next[table.id] = table.venueTableLabel ?? "";
+      });
+      return next;
+    });
+  }, [showReveal, matchedTables]);
+
   const create = useMutation({
     mutationFn: () => dinnersApi.create({
       cityId: form.cityId,
@@ -89,12 +115,34 @@ export default function AdminDinnersPage() {
   });
 
   const reveal = useMutation({
-    mutationFn: ({ id, ...data }: { id: string; venueName: string; venueAddress: string }) => dinnersApi.reveal(id, data),
+    mutationFn: ({ id, ...data }: {
+      id: string;
+      venueName: string;
+      venueAddress: string;
+      arrivalTime: string;
+      reservationName: string;
+      hostName?: string;
+      hostPhone?: string;
+      venueNotes?: string;
+      tables?: { id: string; venueTableLabel?: string }[];
+    }) => dinnersApi.reveal(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin-dinners"] });
       setShowReveal(null);
     },
     meta: { successMessage: "Lokasi berhasil direveal", errorTitle: "Reveal lokasi gagal" },
+  });
+
+  const updateStatus = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => dinnersApi.updateStatus(id, status),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-dinners"] }),
+    meta: { successMessage: "Status dinner berhasil diperbarui", errorTitle: "Status dinner gagal diperbarui" },
+  });
+
+  const cancel = useMutation({
+    mutationFn: (id: string) => dinnersApi.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-dinners"] }),
+    meta: { successMessage: "Dinner berhasil dibatalkan", errorTitle: "Dinner gagal dibatalkan" },
   });
 
   const handleReveal = async () => {
@@ -104,7 +152,53 @@ export default function AdminDinnersPage() {
       description: "Nama venue dan alamat akan disimpan, lalu notifikasi dikirim ke peserta yang sudah matched.",
       confirmText: "Reveal",
     });
-    if (ok) reveal.mutate({ id: showReveal, ...revealData });
+    if (ok) {
+      reveal.mutate({
+        id: showReveal,
+        ...revealData,
+        tables: matchedTables.map((table: any) => ({
+          id: table.id,
+          venueTableLabel: tableLabels[table.id] ?? "",
+        })),
+      });
+    }
+  };
+
+  const openReveal = (dinner: any) => {
+    setShowReveal(dinner.id);
+    setRevealData({
+      venueName: dinner.venueName || "",
+      venueAddress: dinner.venueAddress || "",
+      arrivalTime: dinner.arrivalTime || dinner.startTime || "",
+      reservationName: dinner.reservationName || "",
+      hostName: dinner.hostName || "",
+      hostPhone: dinner.hostPhone || "",
+      venueNotes: dinner.venueNotes || "",
+    });
+    setTableLabels({});
+  };
+
+  const handleToggleBooking = async (dinner: any) => {
+    const nextStatus = dinner.status === "OPEN" ? "MATCHING" : "OPEN";
+    const ok = await confirmAction({
+      title: nextStatus === "MATCHING" ? "Tutup booking dinner?" : "Buka booking lagi?",
+      description: nextStatus === "MATCHING"
+        ? "Dinner akan masuk tahap matching dan booking baru tidak tampil sebagai jadwal terbuka."
+        : "Dinner akan kembali bisa menerima booking dari user.",
+      confirmText: nextStatus === "MATCHING" ? "Tutup Booking" : "Buka Lagi",
+      variant: nextStatus === "MATCHING" ? "danger" : "default",
+    });
+    if (ok) updateStatus.mutate({ id: dinner.id, status: nextStatus });
+  };
+
+  const handleCancelDinner = async (dinner: any) => {
+    const ok = await confirmAction({
+      title: "Batalkan dinner?",
+      description: "Dinner akan dibatalkan dan tidak tampil sebagai jadwal yang bisa dipesan.",
+      confirmText: "Batalkan",
+      variant: "danger",
+    });
+    if (ok) cancel.mutate(dinner.id);
   };
 
   const toggleCreateForm = () => {
@@ -121,6 +215,11 @@ export default function AdminDinnersPage() {
       tiers: current.tiers.filter((_, i) => i !== index),
     }));
   };
+
+  const canReveal = revealData.venueName.trim().length >= 2
+    && revealData.venueAddress.trim().length >= 5
+    && revealData.arrivalTime.trim().length >= 2
+    && revealData.reservationName.trim().length >= 2;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -140,6 +239,16 @@ export default function AdminDinnersPage() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-8">
+        <div className="mb-5 flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-950">Jadwal Dinner</h2>
+            <p className="mt-1 text-sm text-slate-500">Buat jadwal, atur status booking, matching, dan reveal lokasi.</p>
+          </div>
+          <button onClick={toggleCreateForm} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800">
+            <Plus className="h-4 w-4" /> Buat Dinner
+          </button>
+        </div>
+
         {/* Create form */}
         {showCreate && (
           <div className="bg-white rounded-2xl border p-6 mb-6">
@@ -207,18 +316,50 @@ export default function AdminDinnersPage() {
         {/* Reveal modal */}
         {showReveal && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
-            <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-              <h3 className="font-bold text-gray-900 mb-4">Reveal Lokasi</h3>
-              <div className="space-y-3">
+            <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6">
+              <h3 className="font-bold text-gray-900">Briefing Lokasi Dinner</h3>
+              <p className="mt-1 text-sm text-gray-500">Wajib diisi sebelum lokasi dikirim ke peserta.</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <input value={revealData.venueName} onChange={(e) => setRevealData({ ...revealData, venueName: e.target.value })}
-                  placeholder="Nama venue" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                  placeholder="Nama resto / venue *" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
                 <input value={revealData.venueAddress} onChange={(e) => setRevealData({ ...revealData, venueAddress: e.target.value })}
-                  placeholder="Alamat lengkap" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                  placeholder="Alamat lengkap *" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                <input value={revealData.arrivalTime} onChange={(e) => setRevealData({ ...revealData, arrivalTime: e.target.value })}
+                  placeholder="Jam kedatangan, contoh 18:45 *" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                <input value={revealData.reservationName} onChange={(e) => setRevealData({ ...revealData, reservationName: e.target.value })}
+                  placeholder="Reservasi atas nama *" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                <input value={revealData.hostName} onChange={(e) => setRevealData({ ...revealData, hostName: e.target.value })}
+                  placeholder="PIC / host di lokasi" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                <input value={revealData.hostPhone} onChange={(e) => setRevealData({ ...revealData, hostPhone: e.target.value })}
+                  placeholder="Nomor PIC / WhatsApp" className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300" />
+                <textarea rows={3} value={revealData.venueNotes} onChange={(e) => setRevealData({ ...revealData, venueNotes: e.target.value })}
+                  placeholder="Catatan: dress code, lantai, instruksi check-in, deposit, dll." className="w-full resize-none rounded-xl border border-gray-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300 sm:col-span-2" />
               </div>
+
+              {matchedTables.length > 0 && (
+                <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-semibold text-slate-900">Nomor meja restoran</p>
+                  <p className="mt-1 text-xs text-slate-500">Opsional, tapi sebaiknya diisi kalau restoran sudah memberi nomor/area meja.</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {matchedTables.map((table: any) => (
+                      <label key={table.id} className="block">
+                        <span className="mb-1 block text-xs font-medium text-slate-600">{table.name}</span>
+                        <input
+                          value={tableLabels[table.id] ?? ""}
+                          onChange={(e) => setTableLabels((current) => ({ ...current, [table.id]: e.target.value }))}
+                          placeholder="Contoh: Table A3 / Lantai 2"
+                          className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-300"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-3 mt-4">
-                <button onClick={handleReveal} disabled={reveal.isPending || !revealData.venueName}
+                <button onClick={handleReveal} disabled={reveal.isPending || !canReveal}
                   className="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50">
-                  {reveal.isPending ? "Menyimpan..." : "Reveal & Kirim Notif"}
+                  {reveal.isPending ? "Menyimpan..." : "Simpan & Kirim ke Peserta"}
                 </button>
                 <button onClick={() => setShowReveal(null)} className="rounded-xl border px-5 py-2.5 text-sm hover:bg-gray-50">Batal</button>
               </div>
@@ -248,9 +389,18 @@ export default function AdminDinnersPage() {
                       ))}
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {["OPEN", "MATCHING"].includes(d.status) && (
+                      <button
+                        onClick={() => handleToggleBooking(d)}
+                        disabled={updateStatus.isPending}
+                        className="flex items-center gap-1 rounded-xl border px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {d.status === "OPEN" ? "Tutup Booking" : "Buka Lagi"}
+                      </button>
+                    )}
                     {d.status === "MATCHING" && (
-                      <button onClick={() => { setShowReveal(d.id); setRevealData({ venueName: d.venueName || "", venueAddress: d.venueAddress || "" }); }}
+                      <button onClick={() => openReveal(d)}
                         className="flex items-center gap-1 rounded-xl bg-brand-100 text-brand-600 px-3 py-2 text-xs font-medium hover:bg-brand-200">
                         <MapPin className="h-3.5 w-3.5" /> Reveal Lokasi
                       </button>
@@ -258,6 +408,15 @@ export default function AdminDinnersPage() {
                     <Link href={`/admin/matching?dinnerId=${d.id}`} className="flex items-center gap-1 rounded-xl bg-gray-100 text-gray-600 px-3 py-2 text-xs font-medium hover:bg-gray-200">
                       <Eye className="h-3.5 w-3.5" /> Matching
                     </Link>
+                    {!["CANCELLED", "COMPLETED"].includes(d.status) && (
+                      <button
+                        onClick={() => handleCancelDinner(d)}
+                        disabled={cancel.isPending}
+                        className="flex items-center gap-1 rounded-xl bg-red-100 px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-200 disabled:opacity-50"
+                      >
+                        <XCircle className="h-3.5 w-3.5" /> Batalkan
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
