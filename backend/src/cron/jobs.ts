@@ -14,11 +14,51 @@ async function autoCancelExpiredBookings() {
   });
 
   if (expired.length > 0) {
-    await prisma.booking.updateMany({
-      where: { id: { in: expired.map((b) => b.id) } },
-      data: { status: "CANCELLED" },
-    });
+    await prisma.$transaction([
+      prisma.booking.updateMany({
+        where: { id: { in: expired.map((b) => b.id) } },
+        data: { status: "CANCELLED" },
+      }),
+      prisma.payment.updateMany({
+        where: { bookingId: { in: expired.map((b) => b.id) }, status: "PENDING" },
+        data: { status: "REJECTED", note: "Otomatis dibatalkan karena melewati batas waktu pembayaran." },
+      }),
+    ]);
     logger.info({ count: expired.length }, "Auto-cancelled expired bookings");
+  }
+}
+
+async function autoCancelExpiredEventRegistrations() {
+  const registrations = await prisma.eventRegistration.findMany({
+    where: { status: "PENDING_PAYMENT" },
+    select: { id: true, payment: true },
+  });
+  const now = Date.now();
+  const expiredIds = registrations.flatMap((registration) => {
+    const payment = registration.payment as { expiredAt?: string } | null;
+    if (!payment?.expiredAt || new Date(payment.expiredAt).getTime() >= now) return [];
+    return [registration.id];
+  });
+
+  if (expiredIds.length > 0) {
+    const expiredRegistrations = registrations.filter((registration) => expiredIds.includes(registration.id));
+    await prisma.$transaction(
+      expiredRegistrations.map((registration) => {
+        const payment = registration.payment as Record<string, any> | null;
+        return prisma.eventRegistration.update({
+          where: { id: registration.id },
+          data: {
+            status: "CANCELLED",
+            payment: {
+              ...(payment ?? {}),
+              status: "REJECTED",
+              note: payment?.note ?? "Otomatis dibatalkan karena melewati batas waktu pembayaran.",
+            },
+          },
+        });
+      })
+    );
+    logger.info({ count: expiredIds.length }, "Auto-cancelled expired event registrations");
   }
 }
 
@@ -113,6 +153,7 @@ export function startCronJobs() {
   cron.schedule("*/30 * * * *", async () => {
     try {
       await autoCancelExpiredBookings();
+      await autoCancelExpiredEventRegistrations();
     } catch (err) {
       logger.error({ err }, "Cron: auto-cancel failed");
     }

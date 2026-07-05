@@ -16,6 +16,7 @@ interface ParticipantData {
   activity: string | null;
   industry: string | null;
   socialComfort: number | null;
+  personalityType: string | null;
   leisureTopics: string[];
   conversationTopics: string[];
   smokes: boolean | null;
@@ -24,15 +25,18 @@ interface ParticipantData {
 }
 
 type PreviewParticipant = {
+  bookingId: string;
   userId: string;
   name: string;
   age: number;
+  gender: string | null;
   location: string | null;
   interests: string[];
   matchProfile: {
     activity: string | null;
     industry: string | null;
     socialComfort: number | null;
+    personalityType: string | null;
     leisureTopics: string[];
     conversationTopics: string[];
     smokes: boolean | null;
@@ -122,6 +126,7 @@ function profileCompleteness(participant: ParticipantData): number {
     participant.activity,
     participant.industry,
     participant.socialComfort,
+    participant.personalityType,
     participant.leisureTopics.length > 0,
     participant.conversationTopics.length > 0,
     participant.interestIds.length > 0,
@@ -137,6 +142,7 @@ function scorePair(a: ParticipantData, b: ParticipantData, ageTolerance: number)
   const activityScore = exactTextSimilarity(a.activity, b.activity);
   const industryScore = exactTextSimilarity(a.industry, b.industry);
   const socialScore = socialComfortSimilarity(a.socialComfort, b.socialComfort);
+  const personalityScore = exactTextSimilarity(a.personalityType, b.personalityType);
   const locationScore = locationSimilarity(a.location, b.location);
   const ageScore = ageSimilarity(a.age, b.age, ageTolerance);
   const smokeScore = booleanCompatibility(a.smokes, b.smokes);
@@ -150,6 +156,7 @@ function scorePair(a: ParticipantData, b: ParticipantData, ageTolerance: number)
     activityScore * 1.15 +
     industryScore * 1.15 +
     socialScore * 1.4 +
+    personalityScore * 1.1 +
     locationScore * 1.5 +
     ageScore * 1.2 +
     smokeScore * 0.75 +
@@ -242,6 +249,7 @@ function toParticipant(booking: any): ParticipantData {
     activity: booking.user.activity,
     industry: booking.user.industry,
     socialComfort: booking.user.socialComfort,
+    personalityType: booking.user.personalityType,
     leisureTopics: jsonStringArray(booking.user.leisureTopics),
     conversationTopics: conversationTopics.length > 0 ? conversationTopics : interestNames,
     smokes: booking.user.smokes,
@@ -252,15 +260,18 @@ function toParticipant(booking: any): ParticipantData {
 
 function previewParticipant(participant: ParticipantData): PreviewParticipant {
   return {
+    bookingId: participant.bookingId,
     userId: participant.userId,
     name: participant.name,
     age: participant.age,
+    gender: participant.gender,
     location: participant.location,
     interests: participant.interestNames,
     matchProfile: {
       activity: participant.activity,
       industry: participant.industry,
       socialComfort: participant.socialComfort,
+      personalityType: participant.personalityType,
       leisureTopics: participant.leisureTopics,
       conversationTopics: participant.conversationTopics,
       smokes: participant.smokes,
@@ -270,9 +281,9 @@ function previewParticipant(participant: ParticipantData): PreviewParticipant {
   };
 }
 
-async function getConfirmedParticipants(dinnerId: string): Promise<ParticipantData[]> {
+async function getMatchableParticipants(dinnerId: string): Promise<ParticipantData[]> {
   const bookings = await prisma.booking.findMany({
-    where: { dinnerId, status: "CONFIRMED" },
+    where: { dinnerId, status: { in: ["CONFIRMED", "MATCHED"] } },
     include: {
       user: {
         include: { interests: { include: { interest: true } } },
@@ -289,7 +300,7 @@ export const matchingService = {
     if (!dinner) throw new Error("Dinner tidak ditemukan");
 
     const ageTolerance = await getNumberSetting("matching_age_tolerance", "MATCHING_AGE_TOLERANCE", 7);
-    const participants = await getConfirmedParticipants(dinnerId);
+    const participants = await getMatchableParticipants(dinnerId);
     const tables = greedyCluster(participants, dinner.maxPerTable, ageTolerance);
 
     const result = tables.map((table) => ({
@@ -307,12 +318,16 @@ export const matchingService = {
     if (!dinner) throw new Error("Dinner tidak ditemukan");
 
     const ageTolerance = await getNumberSetting("matching_age_tolerance", "MATCHING_AGE_TOLERANCE", 7);
-    const participants = await getConfirmedParticipants(dinnerId);
+    const participants = await getMatchableParticipants(dinnerId);
     const tables = greedyCluster(participants, dinner.maxPerTable, ageTolerance);
 
     let participantsMatched = 0;
 
     await prisma.$transaction(async (tx) => {
+      await tx.booking.updateMany({
+        where: { dinnerId, status: "MATCHED" },
+        data: { tableId: null, status: "CONFIRMED" },
+      });
       await tx.dinnerTable.deleteMany({ where: { dinnerId } });
 
       for (let i = 0; i < tables.length; i++) {

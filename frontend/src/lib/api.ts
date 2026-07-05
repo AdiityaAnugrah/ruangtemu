@@ -14,6 +14,8 @@ export const api = axios.create({
   withCredentials: false,
 });
 
+let refreshPromise: Promise<string> | null = null;
+
 // Inject token from localStorage
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
@@ -33,10 +35,19 @@ api.interceptors.response.use(
       const refreshToken = typeof window !== "undefined" ? localStorage.getItem("refreshToken") : null;
       if (refreshToken) {
         try {
-          const res = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
-          const { accessToken, refreshToken: newRefresh } = res.data;
-          localStorage.setItem("accessToken", accessToken);
-          localStorage.setItem("refreshToken", newRefresh);
+          if (!refreshPromise) {
+            refreshPromise = axios.post(`${BASE_URL}/auth/refresh`, { refreshToken })
+              .then((res) => {
+                const { accessToken, refreshToken: newRefresh } = res.data;
+                localStorage.setItem("accessToken", accessToken);
+                localStorage.setItem("refreshToken", newRefresh);
+                return accessToken as string;
+              })
+              .finally(() => {
+                refreshPromise = null;
+              });
+          }
+          const accessToken = await refreshPromise;
           original.headers.Authorization = `Bearer ${accessToken}`;
           return api(original);
         } catch {
@@ -65,6 +76,7 @@ export const authApi = {
 export const usersApi = {
   updateProfile: (data: unknown) => api.patch("/users/me", data),
   myBookings: () => api.get("/users/me/bookings"),
+  myEventRegistrations: () => api.get("/users/me/event-registrations"),
   listAdmin: () => api.get("/users"),
   getAdmin: (id: string) => api.get(`/users/${id}`),
   setRole: (id: string, role: string) => api.patch(`/users/${id}/role`, { role }),
@@ -114,6 +126,9 @@ export const bookingsApi = {
   },
   cancel: (id: string) => api.delete(`/bookings/${id}`),
   listAdmin: (params?: { dinnerId?: string; status?: string }) => api.get("/bookings", { params }),
+  rescheduleAdmin: (id: string, data: { dinnerId: string; budgetTierId: string }) => api.patch(`/bookings/${id}/reschedule`, data),
+  createManualConfirmed: (data: { userId: string; dinnerId: string; budgetTierId: string; method?: string; note?: string }) =>
+    api.post("/bookings/manual-confirmed", data),
 };
 
 // Payments
@@ -129,12 +144,15 @@ export const matchingApi = {
   preview: (dinnerId: string) => api.get(`/matching/${dinnerId}/preview`),
   commit: (dinnerId: string) => api.post(`/matching/${dinnerId}/commit`),
   tables: (dinnerId: string) => api.get(`/matching/${dinnerId}/tables`),
-  moveBooking: (bookingId: string, tableId: string) => api.patch(`/matching/bookings/${bookingId}/table`, { tableId }),
+  manualBoard: (dinnerId: string) => api.get(`/matching/${dinnerId}/manual`),
+  setupManual: (dinnerId: string, tableCount?: number) => api.post(`/matching/${dinnerId}/manual/setup`, { tableCount }),
+  createManualTable: (dinnerId: string) => api.post(`/matching/${dinnerId}/manual/tables`),
+  moveBooking: (bookingId: string, tableId: string | null) => api.patch(`/matching/bookings/${bookingId}/table`, { tableId }),
 };
 
 // Events
 export const eventsApi = {
-  list: () => api.get("/events"),
+  list: (params?: { cityId?: string }) => api.get("/events", { params }),
   listAll: () => api.get("/events/all"),
   get: (slug: string) => api.get(`/events/${slug}`),
   create: (data: unknown) => api.post("/events", data),
@@ -146,7 +164,16 @@ export const eventsApi = {
   },
   delete: (id: string) => api.delete(`/events/${id}`),
   register: (id: string) => api.post(`/events/${id}/register`),
+  getRegistration: (id: string) => api.get(`/events/registrations/${id}`),
+  uploadRegistrationProof: (id: string, file: File) => {
+    const form = new FormData();
+    form.append("proof", file);
+    return api.post(`/events/registrations/${id}/upload-proof`, form, { headers: { "Content-Type": "multipart/form-data" } });
+  },
   registrations: (id: string) => api.get(`/events/${id}/registrations`),
+  rescheduleRegistrationAdmin: (id: string, eventId: string) => api.patch(`/events/registrations/${id}/reschedule`, { eventId }),
+  createManualConfirmedRegistration: (data: { userId: string; eventId: string; method?: string; note?: string }) =>
+    api.post("/events/manual-confirmed", data),
 };
 
 // Notifications

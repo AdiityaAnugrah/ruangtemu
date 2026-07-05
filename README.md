@@ -8,6 +8,8 @@ RuangTemu adalah social dining platform di mana pengguna mendaftar, memilih jadw
 
 ## Daftar Isi
 
+> Dokumentasi khusus integrasi aplikasi mobile tersedia di [`docs/API_MOBILE.md`](docs/API_MOBILE.md).
+
 1. [Gambaran Produk](#1-gambaran-produk)
 2. [Tech Stack](#2-tech-stack)
 3. [Arsitektur Sistem](#3-arsitektur-sistem)
